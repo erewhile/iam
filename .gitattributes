@@ -1,0 +1,21 @@
+* text=auto
+
+*.go      text eol=lf
+*.mod      text eol=lf
+*.sum      text eol=lf
+*.json     text eol=lf
+*.yaml     text eol=yml
+*.yml      text eol=lf
+*.md       text eol=lf
+.gitignore text eol=lf
+
+*.bat      text eol=crlf
+*.cmd      text eol=crlf
+*.sh       text eol=crlf
+
+*.png      binary
+*.jpg      binary
+*.jpeg     binary
+*.ico      binary
+*.exe      binary
+*.pem      binary

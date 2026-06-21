@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/erewhile/iam/internal/token"
+	"github.com/erewhile/iam/pkg/response"
 	"github.com/gin-gonic/gin"
 )
 
@@ -49,7 +50,5 @@ func (h *CertHandler) JWKS(c *gin.Context) {
 		E:   eStr,
 	}
 
-	c.JSON(http.StatusOK, JWKSResponse{
-		Keys: []JWKKey{jwk},
-	})
+	response.OkData(c.Writer, []JWKKey{jwk})
 }

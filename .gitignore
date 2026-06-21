@@ -31,4 +31,11 @@ go.work.sum
 # .idea/
 # .vscode/
 
+# certs
 certs/*_private.pem
+
+# wire
+internal/wire/*_gen.go
+
+# ent
+internal/ent/db

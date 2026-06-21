@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"time"
 
+	"github.com/erewhile/iam/internal/consts"
 	"github.com/erewhile/iam/pkg/aes"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
@@ -18,7 +19,7 @@ import (
 
 var (
 	signKey   *rsa.PrivateKey
-	verifyKey *rsa.PublicKey
+	VerifyKey *rsa.PublicKey
 )
 
 type UserPayload struct {
@@ -64,7 +65,7 @@ func init() {
 	if err != nil {
 		panic(fmt.Sprintf("failed to read public key: %v", err))
 	}
-	verifyKey, err = jwt.ParseRSAPublicKeyFromPEM(pubBytes)
+	VerifyKey, err = jwt.ParseRSAPublicKeyFromPEM(pubBytes)
 	if err != nil {
 		panic(fmt.Sprintf("failed to parse public key: %v", err))
 	}
@@ -113,6 +114,9 @@ func GenerateToken(userID int, userUUID uuid.UUID, sessionID uuid.UUID, aad []by
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
+
+	token.Header["kid"] = Kid()
+
 	return token.SignedString(signKey)
 }
 
@@ -121,7 +125,14 @@ func ValidateAndDecryptToken(tokenString string, aad []byte) (*Claims, *UserPayl
 		if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
-		return verifyKey, nil
+
+		if tokenKid, ok := token.Header["kid"].(string); ok {
+			if tokenKid != Kid() {
+				return nil, fmt.Errorf("invalid token kid: %s", tokenKid)
+			}
+		}
+
+		return VerifyKey, nil
 	})
 
 	if err != nil {
@@ -152,4 +163,12 @@ func ValidateAndDecryptToken(tokenString string, aad []byte) (*Claims, *UserPayl
 	}
 
 	return claims, &payload, nil
+}
+
+func Kid() string {
+	kid := os.Getenv(consts.EnvJwtKid)
+	if kid == "" {
+		kid = consts.DefaultJwtKid
+	}
+	return kid
 }

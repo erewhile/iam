@@ -80,12 +80,20 @@ type Redis struct {
 	PoolTimeout  time.Duration `json:"pool_timeout"`
 }
 
+type Logger struct {
+	LogsDir    string `json:"logs_dir"`
+	MaxSize    int    `json:"max_size"` // MB
+	MaxBackups int    `json:"max_backups"`
+	MaxAge     int    `json:"max_age"`
+}
+
 type Config struct {
 	Scheme   Scheme   `json:"scheme"`
 	Database Database `json:"database"`
 	Token    Token    `json:"token"`
 	Aes      Aes      `json:"aes"`
 	Redis    Redis    `json:"redis"`
+	Logger   Logger   `json:"logger"`
 }
 
 var (
@@ -99,6 +107,8 @@ func Get() *Config {
 }
 
 func defaultConfig() *Config {
+	logsDir := filepath.Join(flags.Data, "logs")
+
 	return &Config{
 		Scheme: Scheme{
 			Port: ":26621",
@@ -137,6 +147,12 @@ func defaultConfig() *Config {
 			ReadTimeout:  3 * time.Second,
 			WriteTimeout: 3 * time.Second,
 			PoolTimeout:  4 * time.Second,
+		},
+		Logger: Logger{
+			LogsDir:    logsDir,
+			MaxSize:    50,
+			MaxBackups: 10,
+			MaxAge:     24,
 		},
 	}
 }

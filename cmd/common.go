@@ -7,6 +7,7 @@ import (
 	"github.com/erewhile/iam/config"
 	"github.com/erewhile/iam/internal/cache/redis"
 	"github.com/erewhile/iam/internal/database"
+	"github.com/erewhile/iam/internal/logger"
 	"github.com/erewhile/iam/pkg/aes"
 )
 
@@ -22,9 +23,13 @@ func setup() {
 	if err := redis.Init(config.Get().Redis); err != nil {
 		log.Fatalf("failed to init redis: %v", err)
 	}
+	if err := logger.Init(config.Get().Logger); err != nil {
+		log.Fatalf("failed to init logger: %v", err)
+	}
 }
 
 func release() {
 	database.Close()
 	redis.Close()
+	logger.Close()
 }

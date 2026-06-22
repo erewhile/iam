@@ -7,7 +7,7 @@ import (
 	"github.com/erewhile/iam/cmd/flags"
 )
 
-func SetCookie(w http.ResponseWriter, name, value string, maxAge int) {
+func setCookie(w http.ResponseWriter, name, value string, maxAge int) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     name,
 		Value:    value,
@@ -19,7 +19,7 @@ func SetCookie(w http.ResponseWriter, name, value string, maxAge int) {
 	})
 }
 
-func GetCookie(r *http.Request, name string) (string, error) {
+func getCookie(r *http.Request, name string) (string, error) {
 	cookie, err := r.Cookie(name)
 	if err != nil {
 		return "", err
@@ -27,7 +27,7 @@ func GetCookie(r *http.Request, name string) (string, error) {
 	return cookie.Value, nil
 }
 
-func DeleteCookie(w http.ResponseWriter, name string) {
+func deleteCookie(w http.ResponseWriter, name string) {
 	http.SetCookie(w, &http.Cookie{
 		Name:    name,
 		Value:   "",

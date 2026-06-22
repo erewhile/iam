@@ -4,11 +4,14 @@ import (
 	"net/http"
 
 	"github.com/erewhile/iam/config"
+	"github.com/erewhile/iam/internal/consts"
 	"github.com/erewhile/iam/internal/dto/req"
+	"github.com/erewhile/iam/internal/dto/resp"
 	"github.com/erewhile/iam/internal/service"
 	"github.com/erewhile/iam/pkg/response"
 	"github.com/erewhile/iam/pkg/response/code"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 type UserHandler struct {
@@ -35,13 +38,13 @@ func (h *UserHandler) Login(c *gin.Context) {
 		return
 	}
 
-	SetCookie(
+	setCookie(
 		c.Writer,
 		config.Get().Token.AccessTokenCookieKey,
 		tokenPair.AccessToken,
 		int(config.Get().Token.AccessTokenTTL.Seconds()),
 	)
-	SetCookie(
+	setCookie(
 		c.Writer,
 		config.Get().Token.RefreshTokenCookieKey,
 		tokenPair.RefreshToken,
@@ -51,7 +54,26 @@ func (h *UserHandler) Login(c *gin.Context) {
 	response.OK(c.Writer)
 }
 
-func (h *UserHandler) Profile(c *gin.Context) {}
+func (h *UserHandler) Profile(c *gin.Context) {
+	userID := c.GetInt(consts.MiddlewareUserID)
+
+	uuidVal, exists := c.Get(consts.MiddlewareUserUUID)
+	if !exists {
+		response.Custom(c.Writer, http.StatusOK, "missing uuid")
+		return
+	}
+
+	userUUID, ok := uuidVal.(uuid.UUID)
+	if !ok {
+		response.Custom(c.Writer, http.StatusOK, "invalid uuid type")
+		return
+	}
+
+	response.OkData(c.Writer, &resp.UserProfile{
+		UserID:   userID,
+		UserUUID: userUUID,
+	})
+}
 
 func (h *UserHandler) Refresh(c *gin.Context) {}
 

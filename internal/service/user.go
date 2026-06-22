@@ -3,11 +3,11 @@ package service
 import (
 	"context"
 	"errors"
-	"fmt"
 
 	"github.com/erewhile/iam/config"
 	"github.com/erewhile/iam/internal/dto/req"
 	"github.com/erewhile/iam/internal/ent/db"
+	"github.com/erewhile/iam/internal/logger"
 	"github.com/erewhile/iam/internal/model"
 	"github.com/erewhile/iam/internal/repository"
 	"github.com/erewhile/iam/internal/token"
@@ -38,7 +38,8 @@ func NewUserService(
 func (s *UserService) Login(ctx context.Context, param req.UserLogin) (*token.TokenPair, error) {
 	userInfo, err := s.repo.GetByUsername(ctx, param.Username)
 	if err != nil {
-		return nil, fmt.Errorf("login failed: %w", err)
+		logger.Error("login failed:" + err.Error())
+		return nil, errors.New("login failed")
 	}
 
 	if userInfo == nil {
@@ -51,6 +52,7 @@ func (s *UserService) Login(ctx context.Context, param req.UserLogin) (*token.To
 
 	ok, err := password.Validate(param.Password, string(userInfo.PasswordHash))
 	if err != nil {
+		logger.Error("password check failed:" + err.Error())
 		return nil, errors.New("password check failed, please try again later")
 	}
 
@@ -75,6 +77,7 @@ func (s *UserService) Refresh(ctx context.Context, param req.UserRefresh) (*toke
 	}
 
 	if err := s.token.RevokeBySession(ctx, claims.SessionID); err != nil {
+		logger.Error("revoke failed:" + err.Error())
 		return nil, errors.New("revoke failed")
 	}
 
@@ -84,7 +87,8 @@ func (s *UserService) Refresh(ctx context.Context, param req.UserRefresh) (*toke
 
 func (s *UserService) Logout(ctx context.Context, sessionID uuid.UUID) error {
 	if err := s.token.RevokeBySession(ctx, sessionID); err != nil {
-		return fmt.Errorf("logout failed: %w", err)
+		logger.Error("logout failed:" + err.Error())
+		return errors.New("logout failed")
 	}
 	return nil
 }
@@ -103,7 +107,8 @@ func (s *UserService) issueTokenPair(
 		[]byte(config.Get().Token.Aad),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("generate token failed: %w", err)
+		logger.Error("generate token failed:" + err.Error())
+		return nil, errors.New("generate token failed")
 	}
 
 	accessJti := uuid.New()
@@ -139,7 +144,8 @@ func (s *UserService) issueTokenPair(
 		})
 	})
 	if err != nil {
-		return nil, fmt.Errorf("save token failed: %w", err)
+		logger.Error("save token failed:" + err.Error())
+		return nil, errors.New("save token failed")
 	}
 
 	return tokenPair, nil

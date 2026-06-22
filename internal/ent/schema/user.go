@@ -5,6 +5,9 @@ import (
 	"entgo.io/ent/dialect/entsql"
 	"entgo.io/ent/schema"
 	"entgo.io/ent/schema/field"
+	"github.com/erewhile/iam/internal/ent/mixin"
+	"github.com/erewhile/iam/internal/model"
+	"github.com/google/uuid"
 )
 
 // User holds the schema definition for the User entity.
@@ -32,12 +35,17 @@ func (User) Fields() []ent.Field {
 			NotEmpty().
 			Unique(),
 
+		field.UUID("uuid", uuid.UUID{}).
+			Default(uuid.New).
+			Immutable().
+			Unique(),
+
 		field.Bytes("password_hash").
 			NotEmpty().
 			Sensitive().
-			MaxLen(16).
+			MaxLen(255).
 			SchemaType(map[string]string{
-				"mysql": "binary(16)",
+				"mysql": "varbinary(255)",
 			}),
 
 		field.String("email").
@@ -46,7 +54,15 @@ func (User) Fields() []ent.Field {
 			Unique(),
 
 		field.Uint8("status").
-			Default(0),
+			GoType(model.UserStatus(0)).
+			Default(uint8(model.UserStatusPending)),
+	}
+}
+
+func (User) Mixin() []ent.Mixin {
+	return []ent.Mixin{
+		mixin.DatetimeMixin{},
+		mixin.SoftDeleteMixin{},
 	}
 }
 

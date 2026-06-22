@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/erewhile/iam/cmd/flags"
+	"github.com/erewhile/iam/config"
 	"github.com/erewhile/iam/internal/router"
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/cobra"
@@ -37,10 +38,7 @@ func server() {
 	r := gin.Default()
 	router.Init(r)
 
-	addr := os.Getenv("IAM_SCHEME_PORT")
-	if addr == "" {
-		addr = ":26621"
-	}
+	addr := config.Get().Scheme.Port
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
 		log.Fatalf("failed to listen on address %s: %s\n", addr, err)

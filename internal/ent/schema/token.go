@@ -5,6 +5,8 @@ import (
 	"entgo.io/ent/dialect/entsql"
 	"entgo.io/ent/schema"
 	"entgo.io/ent/schema/field"
+	"github.com/erewhile/iam/internal/ent/mixin"
+	"github.com/erewhile/iam/internal/model"
 	"github.com/google/uuid"
 )
 
@@ -31,15 +33,20 @@ func (Token) Fields() []ent.Field {
 		field.Int("user_id"),
 
 		field.UUID("jti", uuid.UUID{}).
+			Immutable().
 			Unique(),
 
 		field.UUID("session_id", uuid.UUID{}),
 
-		field.String("token_hash").
+		field.Uint8("type").
+			GoType(model.TokenType(0)).
+			Default(uint8(model.TokenTypeAccess)),
+
+		field.Bytes("token_hash").
 			Unique().
-			MaxLen(64).
+			MaxLen(32).
 			SchemaType(map[string]string{
-				"mysql": "char(64)",
+				"mysql": "binary(32)",
 			}),
 
 		field.String("ip").
@@ -47,6 +54,7 @@ func (Token) Fields() []ent.Field {
 			Optional(),
 
 		field.Text("user_agent").
+			MaxLen(1024).
 			Optional(),
 
 		field.Time("expires_at"),
@@ -54,6 +62,12 @@ func (Token) Fields() []ent.Field {
 		field.Time("revoked_at").
 			Optional().
 			Nillable(),
+	}
+}
+
+func (Token) Mixin() []ent.Mixin {
+	return []ent.Mixin{
+		mixin.DatetimeMixin{},
 	}
 }
 

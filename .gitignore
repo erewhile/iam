@@ -39,3 +39,6 @@ internal/wire/*_gen.go
 
 # ent
 internal/ent/db
+
+# data
+data/

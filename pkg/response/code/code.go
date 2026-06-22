@@ -11,12 +11,18 @@ const (
 	Custom              Code = -621
 )
 
+const (
+	Parameter Code = 10000 + iota
+)
+
 var statusMessages = map[Code]string{
 	Success:             "OK",
 	Unauthorized:        "Unauthorized",
 	Forbidden:           "Forbidden",
 	NotFound:            "Not Found",
 	InternalServerError: "Internal Server Error",
+
+	Parameter: "Parameter error",
 }
 
 func (c Code) Value() int {

@@ -2,9 +2,11 @@ package repository
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/erewhile/iam/internal/ent/db"
+	"github.com/erewhile/iam/internal/ent/db/token"
 	"github.com/erewhile/iam/internal/model"
 	"github.com/google/uuid"
 )
@@ -21,9 +23,9 @@ type CreateTokenParams struct {
 }
 
 type TokenRepository interface {
-	Create(ctx context.Context, client *db.Client, params CreateTokenParams) error
-	RevokeBySession(ctx context.Context, client *db.Client, sessionID uuid.UUID) error
-	RevokeByJTI(ctx context.Context, client *db.Client, jti uuid.UUID) error
+	Create(ctx context.Context, params CreateTokenParams) error
+	RevokeBySession(ctx context.Context, sessionID uuid.UUID) error
+	RevokeByJTI(ctx context.Context, jti uuid.UUID) error
 }
 
 type tokenRepository struct {
@@ -36,8 +38,8 @@ func NewTokenRepository(client *db.Client) TokenRepository {
 	return &tokenRepository{newBaseRepository(client)}
 }
 
-func (r *tokenRepository) Create(ctx context.Context, client *db.Client, p CreateTokenParams) error {
-	_, err := client.Token.Create().
+func (r *tokenRepository) Create(ctx context.Context, p CreateTokenParams) error {
+	_, err := r.client.Token.Create().
 		SetUserID(p.UserID).
 		SetJti(p.JTI).
 		SetSessionID(p.SessionID).
@@ -47,23 +49,30 @@ func (r *tokenRepository) Create(ctx context.Context, client *db.Client, p Creat
 		SetUserAgent(p.UserAgent).
 		SetExpiresAt(p.ExpiresAt).
 		Save(ctx)
-
-	return err
+	if err != nil {
+		return fmt.Errorf("create token (jti=%s, session=%s): %w", p.JTI, p.SessionID, err)
+	}
+	return nil
 }
 
-func (r *tokenRepository) RevokeBySession(ctx context.Context, client *db.Client, sessionID uuid.UUID) error {
-	_, err := client.Token.Update().
-		Where().
-		Where().
+func (r *tokenRepository) RevokeBySession(ctx context.Context, sessionID uuid.UUID) error {
+	_, err := r.client.Token.Update().
+		Where(token.SessionIDEQ(sessionID), token.RevokedAtIsNil(), token.ExpiresAtGT(time.Now())).
+		SetRevokedAt(time.Now()).
 		Save(ctx)
-
-	return err
+	if err != nil {
+		return fmt.Errorf("revoke session %s: %w", sessionID, err)
+	}
+	return nil
 }
 
-func (r *tokenRepository) RevokeByJTI(ctx context.Context, client *db.Client, jti uuid.UUID) error {
-	_, err := client.Token.Update().
-		Where().
+func (r *tokenRepository) RevokeByJTI(ctx context.Context, jti uuid.UUID) error {
+	_, err := r.client.Token.Update().
+		Where(token.JtiEQ(jti), token.RevokedAtIsNil(), token.ExpiresAtGT(time.Now())).
+		SetRevokedAt(time.Now()).
 		Save(ctx)
-
-	return err
+	if err != nil {
+		return fmt.Errorf("revoke jti %s: %w", jti, err)
+	}
+	return nil
 }

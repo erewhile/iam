@@ -59,57 +59,88 @@ func (s *UserService) Login(ctx context.Context, param req.UserLogin) (*token.To
 	}
 
 	sessionID := uuid.New()
-	accessJti := uuid.New()
-	refreshJti := uuid.New()
-
-	tokenPair, err := token.Generate(
-		userInfo.ID,
-		userInfo.UUID,
-		sessionID,
-		[]byte(config.Get().Token.Aad),
-	)
-	if err != nil {
-		return nil, errors.New("generate token failed")
-	}
-
-	txErr := s.transactor.WithTx(ctx, func(txClient *db.Client) error {
-		now := utils.Now()
-
-		err := s.token.Create(ctx, txClient, repository.CreateTokenParams{
-			UserID:    userInfo.ID,
-			JTI:       accessJti,
-			SessionID: sessionID,
-			Type:      model.TokenTypeAccess,
-			TokenHash: hash.HashBlake2b256([]byte(tokenPair.AccessToken)),
-			ExpiresAt: now.Add(config.Get().Token.AccessTokenTTL),
-			IP:        param.RequestMeta.IP,
-			UserAgent: param.RequestMeta.UserAgent,
-		})
-		if err != nil {
-			return err
-		}
-
-		return s.token.Create(ctx, txClient, repository.CreateTokenParams{
-			UserID:    userInfo.ID,
-			JTI:       refreshJti,
-			SessionID: sessionID,
-			Type:      model.TokenTypeRefresh,
-			TokenHash: hash.HashBlake2b256([]byte(tokenPair.RefreshToken)),
-			ExpiresAt: now.Add(config.Get().Token.RefreshTokenTTL),
-			IP:        param.RequestMeta.IP,
-			UserAgent: param.RequestMeta.UserAgent,
-		})
-	})
-
-	if txErr != nil {
-		return nil, fmt.Errorf("save token failed: %w", txErr)
-	}
-
-	return tokenPair, nil
+	return s.issueTokenPair(ctx, userInfo.ID, userInfo.UUID, sessionID, param.RequestMeta)
 }
 
 func (s *UserService) Profile(ctx context.Context, userID int) {}
 
-func (s *UserService) Refresh(ctx context.Context, param req.UserRefresh) {}
+func (s *UserService) Refresh(ctx context.Context, param req.UserRefresh) (*token.TokenPair, error) {
+	claims, payload, err := token.Validate(
+		param.Token,
+		[]byte(config.Get().Token.Aad),
+		token.TokenTypeRefresh,
+	)
+	if err != nil {
+		return nil, errors.New("invalid token")
+	}
 
-func (s *UserService) Logout(ctx context.Context) {}
+	if err := s.token.RevokeBySession(ctx, claims.SessionID); err != nil {
+		return nil, errors.New("revoke failed")
+	}
+
+	newSessionID := uuid.New()
+	return s.issueTokenPair(ctx, payload.UserID, payload.UserUUID, newSessionID, param.RequestMeta)
+}
+
+func (s *UserService) Logout(ctx context.Context, sessionID uuid.UUID) error {
+	if err := s.token.RevokeBySession(ctx, sessionID); err != nil {
+		return fmt.Errorf("logout failed: %w", err)
+	}
+	return nil
+}
+
+func (s *UserService) issueTokenPair(
+	ctx context.Context,
+	userID int,
+	userUUID uuid.UUID,
+	sessionID uuid.UUID,
+	meta req.RequestMeta,
+) (*token.TokenPair, error) {
+	tokenPair, err := token.Generate(
+		userID,
+		userUUID,
+		sessionID,
+		[]byte(config.Get().Token.Aad),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("generate token failed: %w", err)
+	}
+
+	accessJti := uuid.New()
+	refreshJti := uuid.New()
+	now := utils.Now()
+	tokenCfg := config.Get().Token
+
+	err = s.transactor.WithTx(ctx, func(ctx context.Context, txClient *db.Client) error {
+		txTokenRepo := repository.NewTokenRepository(txClient)
+
+		if err := txTokenRepo.Create(ctx, repository.CreateTokenParams{
+			UserID:    userID,
+			JTI:       accessJti,
+			SessionID: sessionID,
+			Type:      model.TokenTypeAccess,
+			TokenHash: hash.HashBlake2b256([]byte(tokenPair.AccessToken)),
+			ExpiresAt: now.Add(tokenCfg.AccessTokenTTL),
+			IP:        meta.IP,
+			UserAgent: meta.UserAgent,
+		}); err != nil {
+			return err
+		}
+
+		return txTokenRepo.Create(ctx, repository.CreateTokenParams{
+			UserID:    userID,
+			JTI:       refreshJti,
+			SessionID: sessionID,
+			Type:      model.TokenTypeRefresh,
+			TokenHash: hash.HashBlake2b256([]byte(tokenPair.RefreshToken)),
+			ExpiresAt: now.Add(tokenCfg.RefreshTokenTTL),
+			IP:        meta.IP,
+			UserAgent: meta.UserAgent,
+		})
+	})
+	if err != nil {
+		return nil, fmt.Errorf("save token failed: %w", err)
+	}
+
+	return tokenPair, nil
+}

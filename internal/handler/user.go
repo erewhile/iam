@@ -75,6 +75,62 @@ func (h *UserHandler) Profile(c *gin.Context) {
 	})
 }
 
-func (h *UserHandler) Refresh(c *gin.Context) {}
+func (h *UserHandler) Refresh(c *gin.Context) {
+	refreshToken, err := getCookie(c.Request, config.Get().Token.RefreshTokenCookieKey)
+	if err != nil || refreshToken == "" {
+		response.Custom(c.Writer, http.StatusOK, "missing refresh token")
+		return
+	}
 
-func (h *UserHandler) Logout(c *gin.Context) {}
+	param := req.UserRefresh{
+		Token:       refreshToken,
+		RequestMeta: req.GetRequestMeta(c.Request),
+	}
+
+	ctx := c.Request.Context()
+	tokenPair, err := h.srv.Refresh(ctx, param)
+	if err != nil {
+		response.Custom(c.Writer, http.StatusOK, err.Error())
+		return
+	}
+
+	setCookie(
+		c.Writer,
+		config.Get().Token.AccessTokenCookieKey,
+		tokenPair.AccessToken,
+		int(config.Get().Token.AccessTokenTTL.Seconds()),
+	)
+	setCookie(
+		c.Writer,
+		config.Get().Token.RefreshTokenCookieKey,
+		tokenPair.RefreshToken,
+		int(config.Get().Token.RefreshTokenTTL.Seconds()),
+	)
+
+	response.OK(c.Writer)
+}
+
+func (h *UserHandler) Logout(c *gin.Context) {
+	sessionIDVal, exists := c.Get(consts.MiddlewareSessionID)
+	if !exists {
+		response.Custom(c.Writer, http.StatusOK, "missing session")
+		return
+	}
+
+	sessionID, ok := sessionIDVal.(uuid.UUID)
+	if !ok {
+		response.Custom(c.Writer, http.StatusOK, "invalid session type")
+		return
+	}
+
+	ctx := c.Request.Context()
+	if err := h.srv.Logout(ctx, sessionID); err != nil {
+		response.Custom(c.Writer, http.StatusOK, err.Error())
+		return
+	}
+
+	deleteCookie(c.Writer, config.Get().Token.AccessTokenCookieKey)
+	deleteCookie(c.Writer, config.Get().Token.RefreshTokenCookieKey)
+
+	response.OK(c.Writer)
+}

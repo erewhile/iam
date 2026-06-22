@@ -7,6 +7,6 @@ type UserLogin struct {
 }
 
 type UserRefresh struct {
-	Token       string      `form:"token" binding:"required"`
+	Token       string      `form:"-"`
 	RequestMeta RequestMeta `form:"-"`
 }

@@ -11,7 +11,7 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/erewhile/iam/internal/consts"
+	"github.com/erewhile/iam/config"
 	"github.com/erewhile/iam/pkg/aes"
 	"github.com/erewhile/iam/pkg/utils"
 	"github.com/golang-jwt/jwt/v5"
@@ -98,7 +98,7 @@ func Validate(
 		}
 
 		if tokenKid, ok := token.Header["kid"].(string); ok {
-			if tokenKid != Kid() {
+			if tokenKid != config.Get().Token.Kid {
 				return nil, fmt.Errorf("invalid token kid: %s", tokenKid)
 			}
 		}
@@ -140,21 +140,12 @@ func Validate(
 	return claims, &payload, nil
 }
 
-func Kid() string {
-	kid := os.Getenv(consts.EnvJwtKid)
-	if kid == "" {
-		kid = consts.DefaultJwtKid
-	}
-	return kid
-}
-
 func Generate(
 	userID int,
 	userUUID uuid.UUID,
 	sessionID uuid.UUID,
 	aad []byte,
 ) (*TokenPair, error) {
-
 	if sessionID == uuid.Nil {
 		var err error
 		sessionID, err = uuid.NewRandom()
@@ -175,7 +166,7 @@ func Generate(
 		aad,
 		TokenTypeAccess,
 		accessJTI,
-		now.Add(consts.AccessTokenTTL),
+		now.Add(config.Get().Token.AccessTokenTTL),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate access token: %w", err)
@@ -188,7 +179,7 @@ func Generate(
 		aad,
 		TokenTypeRefresh,
 		refreshJTI,
-		now.Add(consts.RefreshTokenTTL),
+		now.Add(config.Get().Token.RefreshTokenTTL),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate refresh token: %w", err)
@@ -198,7 +189,7 @@ func Generate(
 		AccessToken:  accessStr,
 		RefreshToken: refreshStr,
 		SessionID:    sessionID,
-		ExpiresIn:    int64(consts.AccessTokenTTL.Seconds()),
+		ExpiresIn:    int64(config.Get().Token.AccessTokenTTL.Seconds()),
 	}, nil
 }
 
@@ -244,7 +235,7 @@ func generate(
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
-	token.Header["kid"] = Kid()
+	token.Header["kid"] = config.Get().Token.Kid
 
 	return token.SignedString(signKey)
 }

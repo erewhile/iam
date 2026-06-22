@@ -42,3 +42,4 @@ internal/ent/db
 
 # data
 data/
+config.json

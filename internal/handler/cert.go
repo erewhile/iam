@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"net/http"
 
+	"github.com/erewhile/iam/config"
 	"github.com/erewhile/iam/internal/token"
 	"github.com/erewhile/iam/pkg/response"
 	"github.com/gin-gonic/gin"
@@ -39,7 +40,7 @@ func (h *CertHandler) JWKS(c *gin.Context) {
 	nStr := base64.RawURLEncoding.EncodeToString(pubKey.N.Bytes())
 	eBytes := big.NewInt(int64(pubKey.E)).Bytes()
 	eStr := base64.RawURLEncoding.EncodeToString(eBytes)
-	kid := token.Kid()
+	kid := config.Get().Token.Kid
 
 	jwk := JWKKey{
 		Kty: "RSA",

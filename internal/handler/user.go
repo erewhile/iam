@@ -3,6 +3,7 @@ package handler
 import (
 	"net/http"
 
+	"github.com/erewhile/iam/config"
 	"github.com/erewhile/iam/internal/dto/req"
 	"github.com/erewhile/iam/internal/service"
 	"github.com/erewhile/iam/pkg/response"
@@ -27,10 +28,25 @@ func (h *UserHandler) Login(c *gin.Context) {
 
 	param.RequestMeta = req.GetRequestMeta(c.Request)
 	ctx := c.Request.Context()
-	if err := h.srv.Login(ctx, param); err != nil {
+
+	tokenPair, err := h.srv.Login(ctx, param)
+	if err != nil {
 		response.Custom(c.Writer, http.StatusOK, err.Error())
 		return
 	}
+
+	SetCookie(
+		c.Writer,
+		config.Get().Token.AccessTokenCookieKey,
+		tokenPair.AccessToken,
+		int(config.Get().Token.AccessTokenTTL.Seconds()),
+	)
+	SetCookie(
+		c.Writer,
+		config.Get().Token.RefreshTokenCookieKey,
+		tokenPair.RefreshToken,
+		int(config.Get().Token.RefreshTokenTTL.Seconds()),
+	)
 
 	response.OK(c.Writer)
 }

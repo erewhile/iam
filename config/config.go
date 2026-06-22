@@ -53,9 +53,24 @@ func (d *Database) DSN() string {
 	)
 }
 
+type Token struct {
+	Kid                   string `json:"kid"`
+	Aad                   string `json:"aad"`
+	AccessTokenTTL        time.Duration
+	AccessTokenCookieKey  string
+	RefreshTokenTTL       time.Duration
+	RefreshTokenCookieKey string
+}
+
+type Aes struct {
+	Key string `json:"key"`
+}
+
 type Config struct {
 	Scheme   Scheme   `json:"scheme"`
 	Database Database `json:"database"`
+	Token    Token    `json:"token"`
+	Aes      Aes      `json:"aes"`
 }
 
 var (
@@ -83,6 +98,17 @@ func defaultConfig() *Config {
 			MaxIdleConns: 10,
 			MaxOpenConns: 100,
 			MaxLifetime:  time.Hour,
+		},
+		Token: Token{
+			Kid:                   "erewhile-iam-public-key",
+			Aad:                   "30bAOV+0Upo+D3T7c9DPl/hah5ChhXy0",
+			AccessTokenTTL:        5 * time.Minute,
+			AccessTokenCookieKey:  "atck",
+			RefreshTokenTTL:       24 * time.Hour,
+			RefreshTokenCookieKey: "rtck",
+		},
+		Aes: Aes{
+			Key: "co1FsGScYJirTXZ+ymVm/mbZ+4Lhrep2",
 		},
 	}
 }

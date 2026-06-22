@@ -3,13 +3,14 @@ package token
 import (
 	"testing"
 
+	"github.com/erewhile/iam/config"
 	"github.com/erewhile/iam/pkg/aes"
 	"github.com/google/uuid"
 )
 
 func TestEncryptedToken(t *testing.T) {
-	aesKey := []byte("x4AbfHqKSgDUQ6WrAWk5KLpe4al95BXa")
-	aes.Init(aesKey)
+	config.Init()
+	aes.Init([]byte(config.Get().Aes.Key))
 
 	userID := 621
 	userUUID := uuid.New()

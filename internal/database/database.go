@@ -13,6 +13,7 @@ import (
 	"github.com/erewhile/iam/cmd/flags"
 	"github.com/erewhile/iam/config"
 	"github.com/erewhile/iam/internal/ent/db"
+	"github.com/erewhile/iam/internal/ent/db/migrate"
 	_ "github.com/erewhile/iam/internal/ent/db/runtime" // fix db: uninitialized user.DefaultCreatedAt (forgotten import db/runtime?)
 	_ "github.com/go-sql-driver/mysql"
 )
@@ -75,7 +76,10 @@ func GetDB() *db.Client {
 }
 
 func Migrate(ctx context.Context) error {
-	if err := GetDB().Schema.Create(ctx); err != nil {
+	if err := GetDB().Schema.Create(
+		ctx,
+		migrate.WithForeignKeys(false),
+	); err != nil {
 		return fmt.Errorf("failed creating schema resources: %w", err)
 	}
 	return nil

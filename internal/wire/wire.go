@@ -12,23 +12,33 @@ import (
 )
 
 type App struct {
-	Cert *handler.CertHandler
-	User *handler.UserHandler
+	Cert     *handler.CertHandler
+	User     *handler.UserHandler
+	Role     *handler.RoleHandler
+	UserRole *handler.UserRoleHandler
 }
 
 var RepositorySet = wire.NewSet(
 	repository.NewUserRepository,
 	repository.NewTokenRepository,
 	repository.NewTransactor,
+	repository.NewUserRoleRepository,
+	repository.NewRoleRepository,
 )
 
 var ServiceSet = wire.NewSet(
 	service.NewUserService,
+	service.NewUserRoleService,
+	service.NewRoleService,
+	service.NewTokenService,
 )
 
 var HandlerSet = wire.NewSet(
 	handler.NewCertHandler,
 	handler.NewUserHandler,
+	handler.NewRoleHandler,
+	handler.NewUserRoleHandler,
+	handler.NewTokenHandler,
 )
 
 var providerSet = wire.NewSet(

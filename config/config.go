@@ -66,11 +66,26 @@ type Aes struct {
 	Key string `json:"key"`
 }
 
+type Redis struct {
+	Addr         string        `json:"addr"`
+	Password     string        `json:"password"`
+	DB           int           `json:"db"`
+	Prefix       string        `json:"prefix"`
+	PoolSize     int           `json:"pool_size"`
+	MinIdleConns int           `json:"min_idle_conns"`
+	MaxRetries   int           `json:"max_retries"`
+	DialTimeout  time.Duration `json:"dial_timeout"`
+	ReadTimeout  time.Duration `json:"read_timeout"`
+	WriteTimeout time.Duration `json:"write_timeout"`
+	PoolTimeout  time.Duration `json:"pool_timeout"`
+}
+
 type Config struct {
 	Scheme   Scheme   `json:"scheme"`
 	Database Database `json:"database"`
 	Token    Token    `json:"token"`
 	Aes      Aes      `json:"aes"`
+	Redis    Redis    `json:"redis"`
 }
 
 var (
@@ -109,6 +124,19 @@ func defaultConfig() *Config {
 		},
 		Aes: Aes{
 			Key: "co1FsGScYJirTXZ+ymVm/mbZ+4Lhrep2",
+		},
+		Redis: Redis{
+			Addr:         "127.0.0.1:6379",
+			Password:     "",
+			DB:           0,
+			Prefix:       "iam",
+			PoolSize:     100,
+			MinIdleConns: 10,
+			MaxRetries:   3,
+			DialTimeout:  5 * time.Second,
+			ReadTimeout:  3 * time.Second,
+			WriteTimeout: 3 * time.Second,
+			PoolTimeout:  4 * time.Second,
 		},
 	}
 }

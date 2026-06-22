@@ -7,20 +7,32 @@ import (
 
 	"github.com/erewhile/iam/config"
 	"github.com/erewhile/iam/internal/dto/req"
+	"github.com/erewhile/iam/internal/ent/db"
 	"github.com/erewhile/iam/internal/model"
 	"github.com/erewhile/iam/internal/repository"
 	"github.com/erewhile/iam/internal/token"
+	"github.com/erewhile/iam/pkg/hash"
 	"github.com/erewhile/iam/pkg/password"
+	"github.com/erewhile/iam/pkg/utils"
 	"github.com/google/uuid"
 )
 
 type UserService struct {
-	repo  repository.UserRepository
-	token repository.TokenRepository
+	repo       repository.UserRepository
+	token      repository.TokenRepository
+	transactor *repository.Transactor
 }
 
-func NewUserService(repo repository.UserRepository, token repository.TokenRepository) *UserService {
-	return &UserService{repo, token}
+func NewUserService(
+	repo repository.UserRepository,
+	token repository.TokenRepository,
+	transactor *repository.Transactor,
+) *UserService {
+	return &UserService{
+		repo:       repo,
+		token:      token,
+		transactor: transactor,
+	}
 }
 
 func (s *UserService) Login(ctx context.Context, param req.UserLogin) (*token.TokenPair, error) {
@@ -47,9 +59,50 @@ func (s *UserService) Login(ctx context.Context, param req.UserLogin) (*token.To
 	}
 
 	sessionID := uuid.New()
-	tokenPair, err := token.Generate(userInfo.ID, userInfo.UUID, sessionID, []byte(config.Get().Token.Aad))
+	accessJti := uuid.New()
+	refreshJti := uuid.New()
+
+	tokenPair, err := token.Generate(
+		userInfo.ID,
+		userInfo.UUID,
+		sessionID,
+		[]byte(config.Get().Token.Aad),
+	)
 	if err != nil {
 		return nil, errors.New("generate token failed")
+	}
+
+	txErr := s.transactor.WithTx(ctx, func(txClient *db.Client) error {
+		now := utils.Now()
+
+		err := s.token.Create(ctx, txClient, repository.CreateTokenParams{
+			UserID:    userInfo.ID,
+			JTI:       accessJti,
+			SessionID: sessionID,
+			Type:      model.TokenTypeAccess,
+			TokenHash: hash.HashBlake2b256([]byte(tokenPair.AccessToken)),
+			ExpiresAt: now.Add(config.Get().Token.AccessTokenTTL),
+			IP:        param.RequestMeta.IP,
+			UserAgent: param.RequestMeta.UserAgent,
+		})
+		if err != nil {
+			return err
+		}
+
+		return s.token.Create(ctx, txClient, repository.CreateTokenParams{
+			UserID:    userInfo.ID,
+			JTI:       refreshJti,
+			SessionID: sessionID,
+			Type:      model.TokenTypeRefresh,
+			TokenHash: hash.HashBlake2b256([]byte(tokenPair.RefreshToken)),
+			ExpiresAt: now.Add(config.Get().Token.RefreshTokenTTL),
+			IP:        param.RequestMeta.IP,
+			UserAgent: param.RequestMeta.UserAgent,
+		})
+	})
+
+	if txErr != nil {
+		return nil, fmt.Errorf("save token failed: %w", txErr)
 	}
 
 	return tokenPair, nil

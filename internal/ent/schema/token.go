@@ -42,11 +42,11 @@ func (Token) Fields() []ent.Field {
 			GoType(model.TokenType(0)).
 			Default(uint8(model.TokenTypeAccess)),
 
-		field.String("token_hash").
+		field.Bytes("token_hash").
 			Unique().
-			MaxLen(64).
+			MaxLen(32).
 			SchemaType(map[string]string{
-				"mysql": "char(64)",
+				"mysql": "binary(32)",
 			}),
 
 		field.String("ip").
@@ -54,6 +54,7 @@ func (Token) Fields() []ent.Field {
 			Optional(),
 
 		field.Text("user_agent").
+			MaxLen(1024).
 			Optional(),
 
 		field.Time("expires_at"),

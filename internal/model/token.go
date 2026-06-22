@@ -9,7 +9,7 @@ import (
 type TokenType uint8
 
 const (
-	TokenTypeAccess TokenType = 0
+	TokenTypeAccess TokenType = iota
 	TokenTypeRefresh
 )
 

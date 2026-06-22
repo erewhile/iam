@@ -19,6 +19,7 @@ type App struct {
 var RepositorySet = wire.NewSet(
 	repository.NewUserRepository,
 	repository.NewTokenRepository,
+	repository.NewTransactor,
 )
 
 var ServiceSet = wire.NewSet(

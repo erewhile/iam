@@ -185,12 +185,12 @@ func (s *UserService) Info(ctx context.Context, params req.InfoPathParams) (*res
 	}, nil
 }
 
-func (s *UserService) Create(ctx context.Context, params req.UserCreate) error {
-	if !params.Status.IsValid() {
+func (s *UserService) Create(ctx context.Context, body req.UserCreate) error {
+	if !body.Status.IsValid() {
 		return errors.New("invalid user status")
 	}
 
-	exists, err := s.repo.Duplicate(ctx, params.Username, params.Email)
+	exists, err := s.repo.Duplicate(ctx, body.Username, body.Email)
 	if err != nil {
 		logger.Error("failed to check if user exists", err)
 		return errors.New("failed to check if user exists")
@@ -200,13 +200,13 @@ func (s *UserService) Create(ctx context.Context, params req.UserCreate) error {
 		return errors.New("username or email already exists")
 	}
 
-	hashed, err := password.Hash(params.Password)
+	hashed, err := password.Hash(body.Password)
 	if err != nil {
 		logger.Error("failed to hash password", err)
 		return errors.New("failed to hash password")
 	}
 
-	_, err = s.repo.Create(ctx, params, hashed)
+	_, err = s.repo.Create(ctx, body, hashed)
 	if err != nil {
 		logger.Error("failed to create user", err)
 		return errors.New("failed to create user")
@@ -214,17 +214,17 @@ func (s *UserService) Create(ctx context.Context, params req.UserCreate) error {
 	return nil
 }
 
-func (s *UserService) Update(ctx context.Context, pathParams req.UserUpdatePathParams, params req.UserUpdate) error {
-	if !params.Status.IsValid() {
+func (s *UserService) Update(ctx context.Context, params req.UserUpdatePathParams, body req.UserUpdate) error {
+	if !body.Status.IsValid() {
 		return errors.New("invalid user status")
 	}
 
-	if params.Password != "" && len(params.Password) < 6 {
+	if body.Password != "" && len(body.Password) < 6 {
 		// return errors.New("password must be greater than 6 characters")
 		return errors.New("password must be at least 6 characters long")
 	}
 
-	_, err := s.repo.GetByID(ctx, pathParams.ID)
+	_, err := s.repo.GetByID(ctx, params.UserID)
 	if err != nil {
 		if db.IsNotFound(err) {
 			return errors.New("user not found")
@@ -233,7 +233,7 @@ func (s *UserService) Update(ctx context.Context, pathParams req.UserUpdatePathP
 		return errors.New("failed to get user info")
 	}
 
-	exists, err := s.repo.Duplicate(ctx, params.Username, params.Email, pathParams.ID)
+	exists, err := s.repo.Duplicate(ctx, body.Username, body.Email, params.UserID)
 	if err != nil {
 		logger.Error("failed to check if user exists", err)
 		return errors.New("failed to check if user exists")
@@ -243,15 +243,15 @@ func (s *UserService) Update(ctx context.Context, pathParams req.UserUpdatePathP
 	}
 
 	var hashed string
-	if params.Password != "" {
-		hashed, err = password.Hash(params.Password)
+	if body.Password != "" {
+		hashed, err = password.Hash(body.Password)
 		if err != nil {
 			logger.Error("failed to hash password", err)
 			return errors.New("failed to hash password")
 		}
 	}
 
-	_, err = s.repo.Update(ctx, pathParams, params, hashed)
+	_, err = s.repo.Update(ctx, params, body, hashed)
 	if err != nil {
 		logger.Error("failed to update user", err)
 		return errors.New("failed to update user")

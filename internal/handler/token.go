@@ -40,14 +40,14 @@ func (h *TokenHandler) List(c *gin.Context) {
 }
 
 func (h *TokenHandler) Info(c *gin.Context) {
-	var pathParams req.InfoPathParams
-	if err := c.ShouldBindUri(&pathParams); err != nil {
+	var params req.InfoPathParams
+	if err := c.ShouldBindUri(&params); err != nil {
 		response.Fail(c.Writer, code.Parameter)
 		return
 	}
 
 	ctx := c.Request.Context()
-	info, err := h.srv.Info(ctx, pathParams)
+	info, err := h.srv.Info(ctx, params)
 	if err != nil {
 		response.Custom(c.Writer, http.StatusOK, err.Error())
 		return
@@ -57,14 +57,14 @@ func (h *TokenHandler) Info(c *gin.Context) {
 }
 
 func (h *TokenHandler) Revoke(c *gin.Context) {
-	var pathParams req.TokenRevoke
-	if err := c.ShouldBindUri(&pathParams); err != nil {
+	var params req.TokenRevokePathParams
+	if err := c.ShouldBindUri(&params); err != nil {
 		response.Fail(c.Writer, code.Parameter)
 		return
 	}
 
 	ctx := c.Request.Context()
-	if err := h.srv.Revoke(ctx, pathParams); err != nil {
+	if err := h.srv.Revoke(ctx, params); err != nil {
 		response.Custom(c.Writer, http.StatusOK, err.Error())
 		return
 	}

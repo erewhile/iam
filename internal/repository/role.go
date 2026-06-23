@@ -15,6 +15,7 @@ type RoleRepository interface {
 	GetByID(ctx context.Context, id int) (*db.Role, error)
 	GetByCode(ctx context.Context, code string) (*db.Role, error)
 	Duplicate(ctx context.Context, name, code string, id ...int) (bool, error)
+	CountByIDs(ctx context.Context, ids []int) (int, error)
 	Create(ctx context.Context, params req.RoleCreate) (*db.Role, error)
 	Update(ctx context.Context, pathParams req.RoleUpdatePathParams, params req.RoleUpdate) (*db.Role, error)
 	Delete(ctx context.Context, pathParams req.DeletePathParams) error
@@ -109,6 +110,18 @@ func (r *roleRepository) GetByCode(ctx context.Context, code string) (*db.Role, 
 	return roleInfo, nil
 }
 
+func (r *roleRepository) CountByIDs(ctx context.Context, ids []int) (int, error) {
+	if len(ids) == 0 {
+		return 0, nil
+	}
+	return r.client.Role.Query().
+		Where(
+			role.IDIn(ids...),
+			role.DeletedAtIsNil(),
+		).
+		Count(ctx)
+}
+
 func (r *roleRepository) Duplicate(ctx context.Context, name, code string, id ...int) (bool, error) {
 	query := r.client.Role.Query().
 		Where(
@@ -143,7 +156,7 @@ func (r *roleRepository) Create(ctx context.Context, params req.RoleCreate) (*db
 }
 
 func (r *roleRepository) Update(ctx context.Context, pathParams req.RoleUpdatePathParams, params req.RoleUpdate) (*db.Role, error) {
-	updateRes, err := r.client.Role.UpdateOneID(pathParams.ID).
+	updateRes, err := r.client.Role.UpdateOneID(pathParams.RoleID).
 		SetName(params.Name).
 		SetCode(params.Code).
 		Save(ctx)

@@ -40,14 +40,14 @@ func (h *RoleHandler) List(c *gin.Context) {
 }
 
 func (h *RoleHandler) Info(c *gin.Context) {
-	var pathParams req.InfoPathParams
-	if err := c.ShouldBindUri(&pathParams); err != nil {
+	var params req.InfoPathParams
+	if err := c.ShouldBindUri(&params); err != nil {
 		response.Fail(c.Writer, code.Parameter)
 		return
 	}
 
 	ctx := c.Request.Context()
-	info, err := h.srv.Info(ctx, pathParams)
+	info, err := h.srv.Info(ctx, params)
 	if err != nil {
 		response.Custom(c.Writer, http.StatusOK, err.Error())
 		return
@@ -57,14 +57,14 @@ func (h *RoleHandler) Info(c *gin.Context) {
 }
 
 func (h *RoleHandler) Create(c *gin.Context) {
-	var params req.RoleCreate
-	if err := c.ShouldBindJSON(&params); err != nil {
+	var body req.RoleCreate
+	if err := c.ShouldBindJSON(&body); err != nil {
 		response.Fail(c.Writer, code.Parameter)
 		return
 	}
 
 	ctx := c.Request.Context()
-	if err := h.srv.Create(ctx, params); err != nil {
+	if err := h.srv.Create(ctx, body); err != nil {
 		response.Custom(c.Writer, http.StatusOK, err.Error())
 		return
 	}
@@ -73,20 +73,20 @@ func (h *RoleHandler) Create(c *gin.Context) {
 }
 
 func (h *RoleHandler) Update(c *gin.Context) {
-	var pathParams req.RoleUpdatePathParams
-	if err := c.ShouldBindUri(&pathParams); err != nil {
+	var params req.RoleUpdatePathParams
+	if err := c.ShouldBindUri(&params); err != nil {
 		response.Fail(c.Writer, code.Parameter)
 		return
 	}
 
-	var params req.RoleUpdate
-	if err := c.ShouldBindJSON(&params); err != nil {
+	var body req.RoleUpdate
+	if err := c.ShouldBindJSON(&body); err != nil {
 		response.Fail(c.Writer, code.Parameter)
 		return
 	}
 
 	ctx := c.Request.Context()
-	if err := h.srv.Update(ctx, pathParams, params); err != nil {
+	if err := h.srv.Update(ctx, params, body); err != nil {
 		response.Custom(c.Writer, http.StatusOK, err.Error())
 		return
 	}
@@ -95,14 +95,14 @@ func (h *RoleHandler) Update(c *gin.Context) {
 }
 
 func (h *RoleHandler) Delete(c *gin.Context) {
-	var pathParams req.DeletePathParams
-	if err := c.ShouldBindUri(&pathParams); err != nil {
+	var params req.DeletePathParams
+	if err := c.ShouldBindUri(&params); err != nil {
 		response.Fail(c.Writer, code.Parameter)
 		return
 	}
 
 	ctx := c.Request.Context()
-	if err := h.srv.Delete(ctx, pathParams); err != nil {
+	if err := h.srv.Delete(ctx, params); err != nil {
 		response.Custom(c.Writer, http.StatusOK, err.Error())
 		return
 	}

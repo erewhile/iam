@@ -51,8 +51,8 @@ func (s *TokenService) Info(ctx context.Context, params req.InfoPathParams) (*re
 	}, nil
 }
 
-func (s *TokenService) Revoke(ctx context.Context, params req.TokenRevoke) error {
-	tokenInfo, err := s.repo.GetByID(ctx, params.ID)
+func (s *TokenService) Revoke(ctx context.Context, params req.TokenRevokePathParams) error {
+	tokenInfo, err := s.repo.GetByID(ctx, params.TokenID)
 	if err != nil {
 		if db.IsNotFound(err) {
 			return errors.New("token not found")

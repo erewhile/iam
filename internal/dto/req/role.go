@@ -11,7 +11,7 @@ type RoleCreate struct {
 }
 
 type RoleUpdatePathParams struct {
-	ID int `uri:"id" binding:"required"`
+	RoleID int `uri:"id" binding:"required"`
 }
 
 type RoleUpdate struct {

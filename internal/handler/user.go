@@ -189,20 +189,20 @@ func (h *UserHandler) Create(c *gin.Context) {
 }
 
 func (h *UserHandler) Update(c *gin.Context) {
-	var pathParams req.UserUpdatePathParams
-	if err := c.ShouldBindUri(&pathParams); err != nil {
+	var params req.UserUpdatePathParams
+	if err := c.ShouldBindUri(&params); err != nil {
 		response.Fail(c.Writer, code.Parameter)
 		return
 	}
 
-	var params req.UserUpdate
-	if err := c.ShouldBindJSON(&params); err != nil {
+	var body req.UserUpdate
+	if err := c.ShouldBindJSON(&body); err != nil {
 		response.Fail(c.Writer, code.Parameter)
 		return
 	}
 
 	ctx := c.Request.Context()
-	if err := h.srv.Update(ctx, pathParams, params); err != nil {
+	if err := h.srv.Update(ctx, params, body); err != nil {
 		response.Custom(c.Writer, http.StatusOK, err.Error())
 		return
 	}
@@ -211,14 +211,14 @@ func (h *UserHandler) Update(c *gin.Context) {
 }
 
 func (h *UserHandler) Delete(c *gin.Context) {
-	var pathParams req.DeletePathParams
-	if err := c.ShouldBindUri(&pathParams); err != nil {
+	var params req.DeletePathParams
+	if err := c.ShouldBindUri(&params); err != nil {
 		response.Fail(c.Writer, code.Parameter)
 		return
 	}
 
 	ctx := c.Request.Context()
-	if err := h.srv.Delete(ctx, pathParams); err != nil {
+	if err := h.srv.Delete(ctx, params); err != nil {
 		response.Custom(c.Writer, http.StatusOK, err.Error())
 		return
 	}

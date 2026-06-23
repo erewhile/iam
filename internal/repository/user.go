@@ -175,7 +175,7 @@ func (r *userRepository) Create(ctx context.Context, params req.UserCreate, hash
 }
 
 func (r *userRepository) Update(ctx context.Context, pathParams req.UserUpdatePathParams, params req.UserUpdate, hashed string) (*db.User, error) {
-	builder := r.client.User.UpdateOneID(pathParams.ID).
+	builder := r.client.User.UpdateOneID(pathParams.UserID).
 		SetEmail(params.Email).
 		SetUsername(params.Username).
 		SetStatus(params.Status)

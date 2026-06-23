@@ -26,7 +26,7 @@ type UserCreate struct {
 }
 
 type UserUpdatePathParams struct {
-	ID int `uri:"id" binding:"required"`
+	UserID int `uri:"id" binding:"required"`
 }
 
 type UserUpdate struct {

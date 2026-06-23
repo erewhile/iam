@@ -64,6 +64,15 @@ func Custom(w http.ResponseWriter, httpStatus int, message string) {
 	})
 }
 
+func BadRequest(w http.ResponseWriter, message string) {
+	write(w, http.StatusBadRequest, response[any]{
+		Code:    code.BadRequest,
+		Status:  false,
+		Message: message,
+		Data:    nil,
+	})
+}
+
 func Unauthorized(w http.ResponseWriter) {
 	write(w, http.StatusUnauthorized, response[any]{
 		Code:    code.Unauthorized,

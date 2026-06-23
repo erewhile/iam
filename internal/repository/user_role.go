@@ -14,8 +14,9 @@ type UserRoleRepository interface {
 	Replace(ctx context.Context, userID int, roleIDs []int) error
 	RevokeAllByUserID(ctx context.Context, userID int) error
 	RevokeAllByRoleID(ctx context.Context, roleID int) error
-	FindRolesByUserID(ctx context.Context, userID int) ([]*db.Role, error)
-	FindUserIDsByRoleID(ctx context.Context, roleID int) ([]int, error)
+	ExistsByRoleID(ctx context.Context, roleID int) (bool, error)
+	GetRolesByUserID(ctx context.Context, userID int) ([]*db.Role, error)
+	GetUserIDsByRoleID(ctx context.Context, roleID int) ([]int, error)
 }
 
 type userRoleRepository struct {
@@ -93,14 +94,20 @@ func (r *userRoleRepository) RevokeAllByRoleID(ctx context.Context, roleID int) 
 	return err
 }
 
-func (r *userRoleRepository) FindRolesByUserID(ctx context.Context, userID int) ([]*db.Role, error) {
+func (r *userRoleRepository) ExistsByRoleID(ctx context.Context, roleID int) (bool, error) {
+	return r.client.UserRole.Query().
+		Where(userrole.RoleIDEQ(roleID)).
+		Exist(ctx)
+}
+
+func (r *userRoleRepository) GetRolesByUserID(ctx context.Context, userID int) ([]*db.Role, error) {
 	return r.client.User.Query().
 		Where(user.IDEQ(userID)).
 		QueryRoles().
 		All(ctx)
 }
 
-func (r *userRoleRepository) FindUserIDsByRoleID(ctx context.Context, roleID int) ([]int, error) {
+func (r *userRoleRepository) GetUserIDsByRoleID(ctx context.Context, roleID int) ([]int, error) {
 	return r.client.UserRole.Query().
 		Where(userrole.RoleIDEQ(roleID)).
 		Select(userrole.FieldUserID).

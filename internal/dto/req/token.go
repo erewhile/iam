@@ -23,6 +23,6 @@ type TokenCreate struct {
 	ExpiresAt time.Time
 }
 
-type TokenRevoke struct {
-	ID int `uri:"id" binding:"required"`
+type TokenRevokePathParams struct {
+	TokenID int `uri:"id" binding:"required"`
 }

@@ -1,11 +1,5 @@
 package model
 
-import (
-	"time"
-
-	"github.com/google/uuid"
-)
-
 type TokenType uint8
 
 const (
@@ -13,15 +7,22 @@ const (
 	TokenTypeRefresh
 )
 
-type Token struct {
-	ID        int
-	UserID    int
-	Jti       uuid.UUID
-	SessionID uuid.UUID
-	Type      TokenType
-	TokenHash string
-	IP        string
-	UserAgent string
-	ExpiresAt time.Time
-	RevokedAt *time.Time
+func (t TokenType) String() string {
+	switch t {
+	case TokenTypeAccess:
+		return "access"
+	case TokenTypeRefresh:
+		return "refresh"
+	default:
+		return "unknown"
+	}
+}
+
+func (t TokenType) IsValid() bool {
+	switch t {
+	case TokenTypeAccess, TokenTypeRefresh:
+		return true
+	default:
+		return false
+	}
 }

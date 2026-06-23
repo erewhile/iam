@@ -6,6 +6,7 @@ import (
 
 	"github.com/erewhile/iam/config"
 	"github.com/erewhile/iam/internal/dto/req"
+	"github.com/erewhile/iam/internal/dto/resp"
 	"github.com/erewhile/iam/internal/ent/db"
 	"github.com/erewhile/iam/internal/logger"
 	"github.com/erewhile/iam/internal/model"
@@ -38,12 +39,11 @@ func NewUserService(
 func (s *UserService) Login(ctx context.Context, param req.UserLogin) (*token.TokenPair, error) {
 	userInfo, err := s.repo.GetByUsername(ctx, param.Username)
 	if err != nil {
-		logger.Error("login failed:" + err.Error())
+		if db.IsNotFound(err) {
+			return nil, errors.New("user not found")
+		}
+		logger.Error("login failed", err)
 		return nil, errors.New("login failed")
-	}
-
-	if userInfo == nil {
-		return nil, errors.New("user not found")
 	}
 
 	if userInfo.Status != model.UserStatusActive {
@@ -52,7 +52,7 @@ func (s *UserService) Login(ctx context.Context, param req.UserLogin) (*token.To
 
 	ok, err := password.Validate(param.Password, string(userInfo.PasswordHash))
 	if err != nil {
-		logger.Error("password check failed:" + err.Error())
+		logger.Error("password check failed", err)
 		return nil, errors.New("password check failed, please try again later")
 	}
 
@@ -77,7 +77,7 @@ func (s *UserService) Refresh(ctx context.Context, param req.UserRefresh) (*toke
 	}
 
 	if err := s.token.RevokeBySession(ctx, claims.SessionID); err != nil {
-		logger.Error("revoke failed:" + err.Error())
+		logger.Error("revoke failed", err)
 		return nil, errors.New("revoke failed")
 	}
 
@@ -87,7 +87,7 @@ func (s *UserService) Refresh(ctx context.Context, param req.UserRefresh) (*toke
 
 func (s *UserService) Logout(ctx context.Context, sessionID uuid.UUID) error {
 	if err := s.token.RevokeBySession(ctx, sessionID); err != nil {
-		logger.Error("logout failed:" + err.Error())
+		logger.Error("logout failed", err)
 		return errors.New("logout failed")
 	}
 	return nil
@@ -107,7 +107,7 @@ func (s *UserService) issueTokenPair(
 		[]byte(config.Get().Token.Aad),
 	)
 	if err != nil {
-		logger.Error("generate token failed:" + err.Error())
+		logger.Error("generate token failed", err)
 		return nil, errors.New("generate token failed")
 	}
 
@@ -119,9 +119,9 @@ func (s *UserService) issueTokenPair(
 	err = s.transactor.WithTx(ctx, func(ctx context.Context, txClient *db.Client) error {
 		txTokenRepo := repository.NewTokenRepository(txClient)
 
-		if err := txTokenRepo.Create(ctx, repository.CreateTokenParams{
+		if err := txTokenRepo.Create(ctx, req.TokenCreate{
 			UserID:    userID,
-			JTI:       accessJti,
+			Jti:       accessJti,
 			SessionID: sessionID,
 			Type:      model.TokenTypeAccess,
 			TokenHash: hash.HashBlake2b256([]byte(tokenPair.AccessToken)),
@@ -132,9 +132,9 @@ func (s *UserService) issueTokenPair(
 			return err
 		}
 
-		return txTokenRepo.Create(ctx, repository.CreateTokenParams{
+		return txTokenRepo.Create(ctx, req.TokenCreate{
 			UserID:    userID,
-			JTI:       refreshJti,
+			Jti:       refreshJti,
 			SessionID: sessionID,
 			Type:      model.TokenTypeRefresh,
 			TokenHash: hash.HashBlake2b256([]byte(tokenPair.RefreshToken)),
@@ -144,9 +144,136 @@ func (s *UserService) issueTokenPair(
 		})
 	})
 	if err != nil {
-		logger.Error("save token failed:" + err.Error())
+		logger.Error("save token failed", err)
 		return nil, errors.New("save token failed")
 	}
 
 	return tokenPair, nil
+}
+
+func (s *UserService) List(ctx context.Context, params req.UserList) ([]resp.UserListItem, int, error) {
+	content, count, err := s.repo.List(ctx, params)
+	if err != nil {
+		logger.Error("failed to retrieve the list", err)
+		return nil, 0, errors.New("failed to retrieve the list")
+	}
+
+	return content, count, nil
+}
+
+func (s *UserService) Info(ctx context.Context, params req.InfoPathParams) (*resp.UserInfo, error) {
+	userInfo, err := s.repo.GetByID(ctx, params.ID)
+
+	if err != nil {
+		if db.IsNotFound(err) {
+			return nil, errors.New("user not found")
+		}
+		logger.Error("failed to get user info", err)
+		return nil, errors.New("failed to get user info")
+	}
+
+	if userInfo.Status != model.UserStatusActive {
+		return nil, errors.New("account is disabled")
+	}
+
+	return &resp.UserInfo{
+		ID:           userInfo.ID,
+		Username:     userInfo.Username,
+		Email:        userInfo.Email,
+		UUID:         userInfo.UUID,
+		StatusDetail: userInfo.Status.String(),
+	}, nil
+}
+
+func (s *UserService) Create(ctx context.Context, body req.UserCreate) error {
+	if !body.Status.IsValid() {
+		return errors.New("invalid user status")
+	}
+
+	exists, err := s.repo.Duplicate(ctx, body.Username, body.Email)
+	if err != nil {
+		logger.Error("failed to check if user exists", err)
+		return errors.New("failed to check if user exists")
+	}
+
+	if exists {
+		return errors.New("username or email already exists")
+	}
+
+	hashed, err := password.Hash(body.Password)
+	if err != nil {
+		logger.Error("failed to hash password", err)
+		return errors.New("failed to hash password")
+	}
+
+	_, err = s.repo.Create(ctx, body, hashed)
+	if err != nil {
+		logger.Error("failed to create user", err)
+		return errors.New("failed to create user")
+	}
+	return nil
+}
+
+func (s *UserService) Update(ctx context.Context, params req.UserUpdatePathParams, body req.UserUpdate) error {
+	if !body.Status.IsValid() {
+		return errors.New("invalid user status")
+	}
+
+	if body.Password != "" && len(body.Password) < 6 {
+		// return errors.New("password must be greater than 6 characters")
+		return errors.New("password must be at least 6 characters long")
+	}
+
+	_, err := s.repo.GetByID(ctx, params.UserID)
+	if err != nil {
+		if db.IsNotFound(err) {
+			return errors.New("user not found")
+		}
+		logger.Error("get user failed", err)
+		return errors.New("failed to get user info")
+	}
+
+	exists, err := s.repo.Duplicate(ctx, body.Username, body.Email, params.UserID)
+	if err != nil {
+		logger.Error("failed to check if user exists", err)
+		return errors.New("failed to check if user exists")
+	}
+	if exists {
+		return errors.New("username or email already exists")
+	}
+
+	var hashed string
+	if body.Password != "" {
+		hashed, err = password.Hash(body.Password)
+		if err != nil {
+			logger.Error("failed to hash password", err)
+			return errors.New("failed to hash password")
+		}
+	}
+
+	_, err = s.repo.Update(ctx, params, body, hashed)
+	if err != nil {
+		logger.Error("failed to update user", err)
+		return errors.New("failed to update user")
+	}
+
+	return nil
+}
+
+func (s *UserService) Delete(ctx context.Context, pathParams req.DeletePathParams) error {
+	_, err := s.repo.GetByID(ctx, pathParams.ID)
+	if err != nil {
+		if db.IsNotFound(err) {
+			return errors.New("user not found")
+
+		}
+		logger.Error("get user failed", err)
+		return errors.New("failed to get user info")
+	}
+
+	if err := s.repo.Delete(ctx, pathParams); err != nil {
+		logger.Error("failed to delete user", err)
+		return errors.New("failed to delete user")
+	}
+	return nil
 }

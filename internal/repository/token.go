@@ -2,28 +2,20 @@ package repository
 
 import (
 	"context"
-	"fmt"
-	"time"
 
+	"github.com/erewhile/iam/internal/dto/req"
+	"github.com/erewhile/iam/internal/dto/resp"
 	"github.com/erewhile/iam/internal/ent/db"
 	"github.com/erewhile/iam/internal/ent/db/token"
-	"github.com/erewhile/iam/internal/model"
+	"github.com/erewhile/iam/pkg/utils"
 	"github.com/google/uuid"
 )
 
-type CreateTokenParams struct {
-	UserID    int
-	JTI       uuid.UUID
-	SessionID uuid.UUID
-	Type      model.TokenType
-	TokenHash []byte
-	IP        string
-	UserAgent string
-	ExpiresAt time.Time
-}
-
 type TokenRepository interface {
-	Create(ctx context.Context, params CreateTokenParams) error
+	List(ctx context.Context, params req.TokenList) ([]resp.TokenListItem, int, error)
+	Create(ctx context.Context, params req.TokenCreate) error
+	GetByID(ctx context.Context, id int) (*db.Token, error)
+	RevokeByID(ctx context.Context, id int) error
 	RevokeBySession(ctx context.Context, sessionID uuid.UUID) error
 	RevokeByJTI(ctx context.Context, jti uuid.UUID) error
 }
@@ -38,41 +30,117 @@ func NewTokenRepository(client *db.Client) TokenRepository {
 	return &tokenRepository{newBaseRepository(client)}
 }
 
-func (r *tokenRepository) Create(ctx context.Context, p CreateTokenParams) error {
+func (r *tokenRepository) List(ctx context.Context, params req.TokenList) ([]resp.TokenListItem, int, error) {
+	q := r.client.Token.Query().
+		Where(
+			token.ExpiresAtGT(utils.Now()),
+			token.RevokedAtIsNil(),
+		)
+
+	if params.UserID > 0 {
+		q = q.Where(token.UserIDEQ(params.UserID))
+	}
+
+	total, err := q.Clone().Count(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+	if total == 0 {
+		return []resp.TokenListItem{}, 0, nil
+	}
+
+	totalPages := (total + params.PerPage - 1) / params.PerPage
+	if params.Page > totalPages {
+		return []resp.TokenListItem{}, 0, nil
+	}
+
+	offset := (params.Page - 1) * params.PerPage
+
+	tokens, err := q.
+		Order(db.Desc(token.FieldID)).
+		Offset(offset).
+		Limit(params.PerPage).
+		All(ctx)
+	if err != nil {
+		return []resp.TokenListItem{}, 0, err
+	}
+
+	result := make([]resp.TokenListItem, 0, len(tokens))
+	for _, item := range tokens {
+		result = append(result, resp.TokenListItem{
+			ID:         item.ID,
+			UserID:     item.UserID,
+			Jti:        item.Jti,
+			SessionID:  item.SessionID,
+			TypeDetail: item.Type.String(),
+			IP:         item.IP,
+			UserAgent:  item.UserAgent,
+			ExpiresAt:  item.ExpiresAt,
+		})
+	}
+	return result, total, nil
+}
+
+func (r *tokenRepository) Create(ctx context.Context, params req.TokenCreate) error {
 	_, err := r.client.Token.Create().
-		SetUserID(p.UserID).
-		SetJti(p.JTI).
-		SetSessionID(p.SessionID).
-		SetType(p.Type).
-		SetTokenHash(p.TokenHash).
-		SetIP(p.IP).
-		SetUserAgent(p.UserAgent).
-		SetExpiresAt(p.ExpiresAt).
+		SetUserID(params.UserID).
+		SetJti(params.Jti).
+		SetSessionID(params.SessionID).
+		SetType(params.Type).
+		SetTokenHash(params.TokenHash).
+		SetIP(params.IP).
+		SetUserAgent(params.UserAgent).
+		SetExpiresAt(params.ExpiresAt).
 		Save(ctx)
 	if err != nil {
-		return fmt.Errorf("create token (jti=%s, session=%s): %w", p.JTI, p.SessionID, err)
+		return err
+	}
+	return nil
+}
+
+func (r *tokenRepository) GetByID(ctx context.Context, id int) (*db.Token, error) {
+	t, err := r.client.Token.Query().
+		Where(
+			token.IDEQ(id),
+			token.ExpiresAtGT(utils.Now()),
+			token.RevokedAtIsNil(),
+		).
+		Only(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return t, nil
+}
+
+func (r *tokenRepository) RevokeByID(ctx context.Context, id int) error {
+	_, err := r.client.Token.UpdateOneID(id).
+		Where(token.RevokedAtIsNil(), token.ExpiresAtGT(utils.Now())).
+		SetRevokedAt(utils.Now()).
+		Save(ctx)
+	if err != nil {
+		return err
 	}
 	return nil
 }
 
 func (r *tokenRepository) RevokeBySession(ctx context.Context, sessionID uuid.UUID) error {
 	_, err := r.client.Token.Update().
-		Where(token.SessionIDEQ(sessionID), token.RevokedAtIsNil(), token.ExpiresAtGT(time.Now())).
-		SetRevokedAt(time.Now()).
+		Where(token.SessionIDEQ(sessionID), token.RevokedAtIsNil(), token.ExpiresAtGT(utils.Now())).
+		SetRevokedAt(utils.Now()).
 		Save(ctx)
 	if err != nil {
-		return fmt.Errorf("revoke session %s: %w", sessionID, err)
+		return err
 	}
 	return nil
 }
 
 func (r *tokenRepository) RevokeByJTI(ctx context.Context, jti uuid.UUID) error {
 	_, err := r.client.Token.Update().
-		Where(token.JtiEQ(jti), token.RevokedAtIsNil(), token.ExpiresAtGT(time.Now())).
-		SetRevokedAt(time.Now()).
+		Where(token.JtiEQ(jti), token.RevokedAtIsNil(), token.ExpiresAtGT(utils.Now())).
+		SetRevokedAt(utils.Now()).
 		Save(ctx)
 	if err != nil {
-		return fmt.Errorf("revoke jti %s: %w", jti, err)
+		return err
 	}
 	return nil
 }

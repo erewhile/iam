@@ -50,6 +50,7 @@ func (User) Fields() []ent.Field {
 			}),
 
 		field.String("email").
+			MinLen(6).
 			MaxLen(128).
 			NotEmpty().
 			Unique(),

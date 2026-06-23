@@ -16,6 +16,7 @@ type App struct {
 	User     *handler.UserHandler
 	Role     *handler.RoleHandler
 	UserRole *handler.UserRoleHandler
+	Token    *handler.TokenHandler
 }
 
 var RepositorySet = wire.NewSet(

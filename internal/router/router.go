@@ -28,10 +28,39 @@ func Init(e *gin.Engine) {
 	protected := api.Group("")
 	protected.Use(middleware.Auth())
 
+	protectedAuth := protected.Group("/auth")
+	{
+		protectedAuth.POST("/logout", app.User.Logout)
+	}
+
 	users := protected.Group("/users")
 	{
 		users.GET("/me", app.User.Profile)
-		users.POST("/logout", app.User.Logout)
+
+		users.GET("", app.User.List)
+		users.GET("/:id", app.User.Info)
+		users.POST("", app.User.Create)
+		users.PUT("/:id", app.User.Update)
+		users.DELETE("/:id", app.User.Delete)
+
+		users.GET("/:id/roles", app.UserRole.Roles)
+		users.PUT("/:id/roles", app.UserRole.Assign)
+	}
+
+	tokens := protected.Group("/tokens")
+	{
+		tokens.GET("", app.Token.List)
+		tokens.GET("/:id", app.Token.Info)
+		tokens.DELETE("/:id", app.Token.Revoke)
+	}
+
+	roles := protected.Group("/roles")
+	{
+		roles.GET("", app.Role.List)
+		roles.GET("/:id", app.Role.Info)
+		roles.POST("", app.Role.Create)
+		roles.PUT("/:id", app.Role.Update)
+		roles.DELETE("/:id", app.Role.Delete)
 	}
 
 	e.NoRoute(func(c *gin.Context) {

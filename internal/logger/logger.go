@@ -1,9 +1,11 @@
 package logger
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -20,6 +22,44 @@ var (
 	level        zap.AtomicLevel
 	once         sync.Once
 )
+
+type nopSyncWriteSyncer struct {
+	zapcore.WriteSyncer
+}
+
+func (w *nopSyncWriteSyncer) Sync() error {
+	err := w.WriteSyncer.Sync()
+	if err == nil {
+		return nil
+	}
+	if isUnsupportedSyncErr(err) {
+		return nil
+	}
+	return err
+}
+
+func isUnsupportedSyncErr(err error) bool {
+	if runtime.GOOS == "windows" {
+		return true
+	}
+
+	errStr := err.Error()
+	return errors.Is(err, os.ErrInvalid) ||
+		contains(errStr, "invalid argument") ||
+		contains(errStr, "not supported") ||
+		contains(errStr, "handle is invalid")
+}
+
+func contains(s, sub string) bool {
+	return len(s) >= len(sub) && (func() bool {
+		for i := 0; i+len(sub) <= len(s); i++ {
+			if s[i:i+len(sub)] == sub {
+				return true
+			}
+		}
+		return false
+	})()
+}
 
 func Init(cfg config.Logger) error {
 	var initErr error
@@ -79,9 +119,10 @@ func Init(cfg config.Logger) error {
 
 		if flags.Debug {
 			consoleEnc := zapcore.NewConsoleEncoder(zap.NewDevelopmentEncoderConfig())
+			stdoutSyncer := &nopSyncWriteSyncer{WriteSyncer: zapcore.AddSync(os.Stdout)}
 			cores = append(cores, zapcore.NewCore(
 				consoleEnc,
-				zapcore.AddSync(os.Stdout),
+				stdoutSyncer,
 				level,
 			))
 		}

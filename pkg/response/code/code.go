@@ -4,6 +4,7 @@ type Code int
 
 const (
 	Success             Code = 200
+	BadRequest          Code = 400
 	Unauthorized        Code = 401
 	Forbidden           Code = 403
 	NotFound            Code = 404
@@ -17,12 +18,13 @@ const (
 
 var statusMessages = map[Code]string{
 	Success:             "OK",
-	Unauthorized:        "Unauthorized",
-	Forbidden:           "Forbidden",
-	NotFound:            "Not Found",
-	InternalServerError: "Internal Server Error",
+	BadRequest:          "bad request",
+	Unauthorized:        "unauthorized",
+	Forbidden:           "forbidden",
+	NotFound:            "not found",
+	InternalServerError: "internal server error",
 
-	Parameter: "Parameter error",
+	Parameter: "parameter error",
 }
 
 func (c Code) Value() int {

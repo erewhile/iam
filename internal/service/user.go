@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/erewhile/iam/config"
+	"github.com/erewhile/iam/internal/cache/redis"
 	"github.com/erewhile/iam/internal/dto/req"
 	"github.com/erewhile/iam/internal/dto/resp"
 	"github.com/erewhile/iam/internal/ent/db"
@@ -76,6 +77,15 @@ func (s *UserService) Refresh(ctx context.Context, param req.UserRefresh) (*toke
 		return nil, errors.New("invalid token")
 	}
 
+	tokenCache := redis.NewTokenCache()
+	online, err := tokenCache.ExistsRefresh(ctx, claims.SessionID)
+	if err != nil || !online {
+		return nil, errors.New("refresh token expired")
+	}
+
+	_ = tokenCache.DelAccess(ctx, claims.SessionID)
+	_ = tokenCache.DelRefresh(ctx, claims.SessionID)
+
 	if err := s.token.RevokeBySession(ctx, claims.SessionID); err != nil {
 		logger.Error("revoke failed", err)
 		return nil, errors.New("revoke failed")
@@ -86,6 +96,10 @@ func (s *UserService) Refresh(ctx context.Context, param req.UserRefresh) (*toke
 }
 
 func (s *UserService) Logout(ctx context.Context, sessionID uuid.UUID) error {
+	tokenCache := redis.NewTokenCache()
+	_ = tokenCache.DelAccess(ctx, sessionID)
+	_ = tokenCache.DelRefresh(ctx, sessionID)
+
 	if err := s.token.RevokeBySession(ctx, sessionID); err != nil {
 		logger.Error("logout failed", err)
 		return errors.New("logout failed")
@@ -147,6 +161,10 @@ func (s *UserService) issueTokenPair(
 		logger.Error("save token failed", err)
 		return nil, errors.New("save token failed")
 	}
+
+	tokenCache := redis.NewTokenCache()
+	_ = tokenCache.SetAccess(ctx, sessionID, config.Get().Token.AccessTokenTTL)
+	_ = tokenCache.SetRefresh(ctx, sessionID, config.Get().Token.RefreshTokenTTL)
 
 	return tokenPair, nil
 }

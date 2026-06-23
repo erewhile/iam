@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/erewhile/iam/internal/cache/redis"
 	"github.com/erewhile/iam/internal/dto/req"
 	"github.com/erewhile/iam/internal/dto/resp"
 	"github.com/erewhile/iam/internal/ent/db"
@@ -60,6 +61,10 @@ func (s *TokenService) Revoke(ctx context.Context, params req.TokenRevokePathPar
 		logger.Error("failed to get token info", err.Error())
 		return errors.New("failed to get token info")
 	}
+
+	tokenCache := redis.NewTokenCache()
+	_ = tokenCache.DelAccess(ctx, tokenInfo.SessionID)
+	_ = tokenCache.DelRefresh(ctx, tokenInfo.SessionID)
 
 	if err := s.repo.RevokeBySession(ctx, tokenInfo.SessionID); err != nil {
 		logger.Error("failed to revoke token", err.Error())

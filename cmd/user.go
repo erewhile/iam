@@ -9,6 +9,7 @@ import (
 
 	"github.com/erewhile/iam/config"
 	"github.com/erewhile/iam/internal/database"
+	"github.com/erewhile/iam/internal/dto/req"
 	"github.com/erewhile/iam/internal/model"
 	"github.com/erewhile/iam/internal/repository"
 	"github.com/erewhile/iam/pkg/password"
@@ -58,12 +59,11 @@ func runUserAdd(cmd *cobra.Command, args []string) error {
 	defer cancel()
 
 	userRepo := repository.NewUserRepository(database.GetDB())
-	u, err := userRepo.Create(ctx, repository.CreateUserParams{
-		Email:        addUserEmail,
-		Username:     addUserUsername,
-		PasswordHash: []byte(hashed),
-		Status:       model.UserStatusActive,
-	})
+	u, err := userRepo.Create(ctx, req.UserCreate{
+		Email:    addUserEmail,
+		Username: addUserUsername,
+		Status:   model.UserStatusActive,
+	}, hashed)
 	if err != nil {
 		return fmt.Errorf("failed to create user: %w", err)
 	}

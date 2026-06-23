@@ -1,7 +1,5 @@
 package model
 
-import "github.com/google/uuid"
-
 type UserStatus uint8
 
 const (
@@ -23,10 +21,11 @@ func (s UserStatus) String() string {
 	}
 }
 
-type User struct {
-	ID       int
-	Username string
-	UUID     uuid.UUID
-	Email    string
-	Status   UserStatus
+func (s UserStatus) IsValid() bool {
+	switch s {
+	case UserStatusPending, UserStatusActive, UserStatusDisabled:
+		return true
+	default:
+		return false
+	}
 }

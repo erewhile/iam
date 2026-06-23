@@ -11,6 +11,7 @@ import (
 type UserRoleRepository interface {
 	Assign(ctx context.Context, userID int, roleIDs []int) error
 	Revoke(ctx context.Context, userID int, roleIDs []int) error
+	Replace(ctx context.Context, userID int, roleIDs []int) error
 	RevokeAllByUserID(ctx context.Context, userID int) error
 	RevokeAllByRoleID(ctx context.Context, roleID int) error
 	FindRolesByUserID(ctx context.Context, userID int) ([]*db.Role, error)
@@ -53,6 +54,29 @@ func (r *userRoleRepository) Revoke(ctx context.Context, userID int, roleIDs []i
 		).
 		Exec(ctx)
 	return err
+}
+
+func (r *userRoleRepository) Replace(ctx context.Context, userID int, roleIDs []int) error {
+	if _, err := r.client.UserRole.Delete().
+		Where(userrole.UserIDEQ(userID)).
+		Exec(ctx); err != nil {
+		return err
+	}
+
+	if len(roleIDs) == 0 {
+		return nil
+	}
+
+	builders := make([]*db.UserRoleCreate, len(roleIDs))
+	for i, roleID := range roleIDs {
+		builders[i] = r.client.UserRole.Create().
+			SetUserID(userID).
+			SetRoleID(roleID)
+	}
+	if err := r.client.UserRole.CreateBulk(builders...).Exec(ctx); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (r *userRoleRepository) RevokeAllByUserID(ctx context.Context, userID int) error {

@@ -23,16 +23,16 @@ func NewUserHandler(srv *service.UserService) *UserHandler {
 }
 
 func (h *UserHandler) Login(c *gin.Context) {
-	var param req.UserLogin
-	if err := c.ShouldBindJSON(&param); err != nil {
+	var params req.UserLogin
+	if err := c.ShouldBindJSON(&params); err != nil {
 		response.Fail(c.Writer, code.Parameter)
 		return
 	}
 
-	param.RequestMeta = req.GetRequestMeta(c.Request)
+	params.RequestMeta = req.GetRequestMeta(c.Request)
 	ctx := c.Request.Context()
 
-	tokenPair, err := h.srv.Login(ctx, param)
+	tokenPair, err := h.srv.Login(ctx, params)
 	if err != nil {
 		response.Custom(c.Writer, http.StatusOK, err.Error())
 		return
@@ -131,6 +131,97 @@ func (h *UserHandler) Logout(c *gin.Context) {
 
 	deleteCookie(c.Writer, config.Get().Token.AccessTokenCookieKey)
 	deleteCookie(c.Writer, config.Get().Token.RefreshTokenCookieKey)
+
+	response.OK(c.Writer)
+}
+
+func (h *UserHandler) List(c *gin.Context) {
+	var params req.UserList
+	if err := c.ShouldBindQuery(&params); err != nil {
+		response.Fail(c.Writer, code.Parameter)
+		return
+	}
+
+	ctx := c.Request.Context()
+	content, count, err := h.srv.List(ctx, params)
+	if err != nil {
+		response.Custom(c.Writer, http.StatusOK, err.Error())
+		return
+	}
+
+	response.OkData(c.Writer, resp.List{
+		Content: content,
+		Count:   count,
+	})
+}
+
+func (h *UserHandler) Info(c *gin.Context) {
+	var pathParams req.InfoPathParams
+	if err := c.ShouldBindUri(&pathParams); err != nil {
+		response.Fail(c.Writer, code.Parameter)
+		return
+	}
+
+	ctx := c.Request.Context()
+	info, err := h.srv.Info(ctx, pathParams.ID)
+	if err != nil {
+		response.Custom(c.Writer, http.StatusOK, err.Error())
+		return
+	}
+
+	response.OkData(c.Writer, info)
+}
+
+func (h *UserHandler) Create(c *gin.Context) {
+	var params req.UserCreate
+	if err := c.ShouldBindJSON(&params); err != nil {
+		response.Fail(c.Writer, code.Parameter)
+		return
+	}
+
+	ctx := c.Request.Context()
+	if err := h.srv.Create(ctx, params); err != nil {
+		response.Custom(c.Writer, http.StatusOK, err.Error())
+		return
+	}
+
+	response.OK(c.Writer)
+}
+
+func (h *UserHandler) Update(c *gin.Context) {
+	var pathParams req.UserUpdatePathParams
+	if err := c.ShouldBindUri(&pathParams); err != nil {
+		response.Fail(c.Writer, code.Parameter)
+		return
+	}
+
+	var params req.UserUpdate
+	if err := c.ShouldBindJSON(&params); err != nil {
+		response.Fail(c.Writer, code.Parameter)
+		return
+	}
+
+	ctx := c.Request.Context()
+	if err := h.srv.Update(ctx, pathParams, params); err != nil {
+		response.Custom(c.Writer, http.StatusOK, err.Error())
+		return
+	}
+
+	response.OK(c.Writer)
+}
+
+func (h *UserHandler) Delete(c *gin.Context) {
+	var pathParams req.DeletePathParams
+	if err := c.ShouldBindUri(&pathParams); err != nil {
+		response.Fail(c.Writer, code.Parameter)
+		return
+	}
+
+	ctx := c.Request.Context()
+	if err := h.srv.Delete(ctx, pathParams); err != nil {
+		response.Custom(c.Writer, http.StatusOK, err.Error())
+		return
+	}
 
 	response.OK(c.Writer)
 }

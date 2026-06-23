@@ -68,7 +68,7 @@ func (r *userRepository) List(ctx context.Context, params req.UserList) ([]resp.
 		Limit(params.PerPage).
 		All(ctx)
 	if err != nil {
-		return nil, 0, err
+		return []resp.UserListItem{}, 0, err
 	}
 
 	result := make([]resp.UserListItem, 0, len(users))

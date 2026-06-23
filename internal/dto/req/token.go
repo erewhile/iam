@@ -7,13 +7,22 @@ import (
 	"github.com/google/uuid"
 )
 
+type TokenList struct {
+	UserID int `form:"user_id,omitempty"`
+	Pagination
+}
+
 type TokenCreate struct {
 	UserID    int
-	JTI       uuid.UUID
+	Jti       uuid.UUID
 	SessionID uuid.UUID
 	Type      model.TokenType
 	TokenHash []byte
 	IP        string
 	UserAgent string
 	ExpiresAt time.Time
+}
+
+type TokenRevoke struct {
+	ID int `uri:"id" binding:"required"`
 }

@@ -64,7 +64,7 @@ func (r *roleRepository) List(ctx context.Context, params req.RoleList) ([]resp.
 		Limit(params.PerPage).
 		All(ctx)
 	if err != nil {
-		return nil, 0, err
+		return []resp.RoleListItem{}, 0, err
 	}
 
 	result := make([]resp.RoleListItem, 0, len(roles))

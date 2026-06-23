@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/erewhile/iam/internal/dto/req"
+	"github.com/erewhile/iam/internal/dto/resp"
 	"github.com/erewhile/iam/internal/ent/db"
 	"github.com/erewhile/iam/internal/ent/db/token"
 	"github.com/erewhile/iam/pkg/utils"
@@ -11,6 +12,7 @@ import (
 )
 
 type TokenRepository interface {
+	List(ctx context.Context, params req.TokenList) ([]resp.TokenListItem, int, error)
 	Create(ctx context.Context, params req.TokenCreate) error
 	GetByID(ctx context.Context, id int) (*db.Token, error)
 	RevokeByID(ctx context.Context, id int) error
@@ -28,10 +30,61 @@ func NewTokenRepository(client *db.Client) TokenRepository {
 	return &tokenRepository{newBaseRepository(client)}
 }
 
+func (r *tokenRepository) List(ctx context.Context, params req.TokenList) ([]resp.TokenListItem, int, error) {
+	q := r.client.Token.Query().
+		Where(
+			token.ExpiresAtGT(utils.Now()),
+			token.RevokedAtIsNil(),
+		)
+
+	if params.UserID > 0 {
+		q = q.Where(token.UserIDEQ(params.UserID))
+	}
+
+	total, err := q.Clone().Count(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+	if total == 0 {
+		return []resp.TokenListItem{}, 0, nil
+	}
+
+	totalPages := (total + params.PerPage - 1) / params.PerPage
+	if params.Page > totalPages {
+		return []resp.TokenListItem{}, 0, nil
+	}
+
+	offset := (params.Page - 1) * params.PerPage
+
+	tokens, err := q.
+		Order(db.Desc(token.FieldID)).
+		Offset(offset).
+		Limit(params.PerPage).
+		All(ctx)
+	if err != nil {
+		return []resp.TokenListItem{}, 0, err
+	}
+
+	result := make([]resp.TokenListItem, 0, len(tokens))
+	for _, item := range tokens {
+		result = append(result, resp.TokenListItem{
+			ID:         item.ID,
+			UserID:     item.UserID,
+			Jti:        item.Jti,
+			SessionID:  item.SessionID,
+			TypeDetail: item.Type.String(),
+			IP:         item.IP,
+			UserAgent:  item.UserAgent,
+			ExpiresAt:  item.ExpiresAt,
+		})
+	}
+	return result, total, nil
+}
+
 func (r *tokenRepository) Create(ctx context.Context, params req.TokenCreate) error {
 	_, err := r.client.Token.Create().
 		SetUserID(params.UserID).
-		SetJti(params.JTI).
+		SetJti(params.Jti).
 		SetSessionID(params.SessionID).
 		SetType(params.Type).
 		SetTokenHash(params.TokenHash).
@@ -46,7 +99,13 @@ func (r *tokenRepository) Create(ctx context.Context, params req.TokenCreate) er
 }
 
 func (r *tokenRepository) GetByID(ctx context.Context, id int) (*db.Token, error) {
-	t, err := r.client.Token.Get(ctx, id)
+	t, err := r.client.Token.Query().
+		Where(
+			token.IDEQ(id),
+			token.ExpiresAtGT(utils.Now()),
+			token.RevokedAtIsNil(),
+		).
+		Only(ctx)
 	if err != nil {
 		return nil, err
 	}

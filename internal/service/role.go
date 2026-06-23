@@ -6,6 +6,7 @@ import (
 
 	"github.com/erewhile/iam/internal/dto/req"
 	"github.com/erewhile/iam/internal/dto/resp"
+	"github.com/erewhile/iam/internal/ent/db"
 	"github.com/erewhile/iam/internal/logger"
 	"github.com/erewhile/iam/internal/repository"
 )
@@ -21,7 +22,7 @@ func NewRoleService(repo repository.RoleRepository) *RoleService {
 func (s *RoleService) List(ctx context.Context, params req.RoleList) ([]resp.RoleListItem, int, error) {
 	content, count, err := s.repo.List(ctx, params)
 	if err != nil {
-		logger.Error("failed to retrieve the list ", err.Error())
+		logger.Error("failed to retrieve the list ", err)
 		return nil, 0, errors.New("failed to retrieve the list")
 	}
 
@@ -31,12 +32,11 @@ func (s *RoleService) List(ctx context.Context, params req.RoleList) ([]resp.Rol
 func (s *RoleService) Info(ctx context.Context, params req.InfoPathParams) (*resp.RoleInfo, error) {
 	roleInfo, err := s.repo.GetByID(ctx, params.ID)
 	if err != nil {
-		logger.Error("failed to get role info", err.Error())
+		if db.IsNotFound(err) {
+			return nil, errors.New("role not found")
+		}
+		logger.Error("failed to get role info", err)
 		return nil, errors.New("failed to get role info")
-	}
-
-	if roleInfo == nil {
-		return nil, errors.New("role not found")
 	}
 
 	return &resp.RoleInfo{
@@ -59,20 +59,20 @@ func (s *RoleService) Create(ctx context.Context, params req.RoleCreate) error {
 
 	_, err = s.repo.Create(ctx, params)
 	if err != nil {
-		logger.Error("failed to create user", err)
-		return errors.New("failed to create user")
+		logger.Error("failed to create role", err)
+		return errors.New("failed to create role")
 	}
 	return nil
 }
 
 func (s *RoleService) Update(ctx context.Context, pathParams req.RoleUpdatePathParams, params req.RoleUpdate) error {
-	roleInfo, err := s.repo.GetByID(ctx, pathParams.ID)
+	_, err := s.repo.GetByID(ctx, pathParams.ID)
 	if err != nil {
-		logger.Error("get role failed", err.Error())
+		if db.IsNotFound(err) {
+			return errors.New("role not found")
+		}
+		logger.Error("get role failed", err)
 		return errors.New("failed to get role info")
-	}
-	if roleInfo == nil {
-		return errors.New("user not found")
 	}
 
 	exists, err := s.repo.Duplicate(ctx, params.Name, params.Code, pathParams.ID)
@@ -94,13 +94,13 @@ func (s *RoleService) Update(ctx context.Context, pathParams req.RoleUpdatePathP
 }
 
 func (s *RoleService) Delete(ctx context.Context, pathParams req.DeletePathParams) error {
-	roleInfo, err := s.repo.GetByID(ctx, pathParams.ID)
+	_, err := s.repo.GetByID(ctx, pathParams.ID)
 	if err != nil {
+		if db.IsNotFound(err) {
+			return errors.New("role not found")
+		}
 		logger.Error("get role failed", err.Error())
 		return errors.New("failed to get role info")
-	}
-	if roleInfo == nil {
-		return errors.New("role not found")
 	}
 
 	if err := s.repo.Delete(ctx, pathParams); err != nil {

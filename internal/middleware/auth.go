@@ -4,7 +4,7 @@ import (
 	"net/http"
 
 	"github.com/erewhile/iam/config"
-	"github.com/erewhile/iam/internal/cache/redis"
+	"github.com/erewhile/iam/internal/cache/rds"
 	"github.com/erewhile/iam/internal/consts"
 	"github.com/erewhile/iam/internal/token"
 	"github.com/erewhile/iam/pkg/response"
@@ -27,7 +27,7 @@ func Auth() gin.HandlerFunc {
 			return
 		}
 
-		tokenCache := redis.NewTokenCache()
+		tokenCache := rds.NewTokenCache()
 		online, err := tokenCache.ExistsAccess(c.Request.Context(), claims.SessionID)
 		if err != nil || !online {
 			response.Custom(c.Writer, http.StatusUnauthorized, "session expired or logged out")

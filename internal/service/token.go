@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/erewhile/iam/internal/cache/redis"
+	"github.com/erewhile/iam/internal/cache/rds"
 	"github.com/erewhile/iam/internal/dto/req"
 	"github.com/erewhile/iam/internal/dto/resp"
 	"github.com/erewhile/iam/internal/ent/db"
@@ -62,7 +62,7 @@ func (s *TokenService) Revoke(ctx context.Context, params req.TokenRevokePathPar
 		return errors.New("failed to get token info")
 	}
 
-	tokenCache := redis.NewTokenCache()
+	tokenCache := rds.NewTokenCache()
 	_ = tokenCache.DelAccess(ctx, tokenInfo.SessionID)
 	_ = tokenCache.DelRefresh(ctx, tokenInfo.SessionID)
 

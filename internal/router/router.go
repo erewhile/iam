@@ -24,6 +24,11 @@ func Init(e *gin.Engine) {
 		auth.POST("/refresh", app.User.Refresh)
 	}
 
+	oauthPublic := api.Group("/oauth")
+	{
+		oauthPublic.POST("/token", app.OAuth.ExchangeToken)
+	}
+
 	// Protected routes
 	protected := api.Group("")
 	protected.Use(middleware.Auth())
@@ -31,6 +36,11 @@ func Init(e *gin.Engine) {
 	protectedAuth := protected.Group("/auth")
 	{
 		protectedAuth.POST("/logout", app.User.Logout)
+	}
+
+	oauthProtected := protected.Group("/oauth")
+	{
+		oauthProtected.GET("/authorize", app.OAuth.Authorize)
 	}
 
 	users := protected.Group("/users")

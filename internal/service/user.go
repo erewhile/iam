@@ -5,7 +5,7 @@ import (
 	"errors"
 
 	"github.com/erewhile/iam/config"
-	"github.com/erewhile/iam/internal/cache/redis"
+	"github.com/erewhile/iam/internal/cache/rds"
 	"github.com/erewhile/iam/internal/dto/req"
 	"github.com/erewhile/iam/internal/dto/resp"
 	"github.com/erewhile/iam/internal/ent/db"
@@ -65,6 +65,10 @@ func (s *UserService) Login(ctx context.Context, param req.UserLogin) (*token.To
 	return s.issueTokenPair(ctx, userInfo.ID, userInfo.UUID, sessionID, param.RequestMeta)
 }
 
+func (s *UserService) LoginWithOAuthCode(ctx context.Context, payload *rds.OAuthCodePayload, meta req.RequestMeta) (*token.TokenPair, error) {
+	return s.issueTokenPair(ctx, payload.UserID, payload.UserUUID, payload.SessionID, meta)
+}
+
 func (s *UserService) Profile(ctx context.Context, userID int) {}
 
 func (s *UserService) Refresh(ctx context.Context, param req.UserRefresh) (*token.TokenPair, error) {
@@ -77,7 +81,7 @@ func (s *UserService) Refresh(ctx context.Context, param req.UserRefresh) (*toke
 		return nil, errors.New("invalid token")
 	}
 
-	tokenCache := redis.NewTokenCache()
+	tokenCache := rds.NewTokenCache()
 	online, err := tokenCache.ExistsRefresh(ctx, claims.SessionID)
 	if err != nil || !online {
 		return nil, errors.New("refresh token expired")
@@ -96,7 +100,7 @@ func (s *UserService) Refresh(ctx context.Context, param req.UserRefresh) (*toke
 }
 
 func (s *UserService) Logout(ctx context.Context, sessionID uuid.UUID) error {
-	tokenCache := redis.NewTokenCache()
+	tokenCache := rds.NewTokenCache()
 	_ = tokenCache.DelAccess(ctx, sessionID)
 	_ = tokenCache.DelRefresh(ctx, sessionID)
 
@@ -162,7 +166,7 @@ func (s *UserService) issueTokenPair(
 		return nil, errors.New("save token failed")
 	}
 
-	tokenCache := redis.NewTokenCache()
+	tokenCache := rds.NewTokenCache()
 	_ = tokenCache.SetAccess(ctx, sessionID, config.Get().Token.AccessTokenTTL)
 	_ = tokenCache.SetRefresh(ctx, sessionID, config.Get().Token.RefreshTokenTTL)
 

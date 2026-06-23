@@ -39,7 +39,7 @@ func NewUserService(
 func (s *UserService) Login(ctx context.Context, param req.UserLogin) (*token.TokenPair, error) {
 	userInfo, err := s.repo.GetByUsername(ctx, param.Username)
 	if err != nil {
-		logger.Error("login failed:", err.Error())
+		logger.Error("login failed", err.Error())
 		return nil, errors.New("login failed")
 	}
 
@@ -53,7 +53,7 @@ func (s *UserService) Login(ctx context.Context, param req.UserLogin) (*token.To
 
 	ok, err := password.Validate(param.Password, string(userInfo.PasswordHash))
 	if err != nil {
-		logger.Error("password check failed:", err.Error())
+		logger.Error("password check failed", err.Error())
 		return nil, errors.New("password check failed, please try again later")
 	}
 
@@ -78,7 +78,7 @@ func (s *UserService) Refresh(ctx context.Context, param req.UserRefresh) (*toke
 	}
 
 	if err := s.token.RevokeBySession(ctx, claims.SessionID); err != nil {
-		logger.Error("revoke failed:", err.Error())
+		logger.Error("revoke failed", err.Error())
 		return nil, errors.New("revoke failed")
 	}
 
@@ -88,7 +88,7 @@ func (s *UserService) Refresh(ctx context.Context, param req.UserRefresh) (*toke
 
 func (s *UserService) Logout(ctx context.Context, sessionID uuid.UUID) error {
 	if err := s.token.RevokeBySession(ctx, sessionID); err != nil {
-		logger.Error("logout failed:", err.Error())
+		logger.Error("logout failed", err.Error())
 		return errors.New("logout failed")
 	}
 	return nil
@@ -108,7 +108,7 @@ func (s *UserService) issueTokenPair(
 		[]byte(config.Get().Token.Aad),
 	)
 	if err != nil {
-		logger.Error("generate token failed:", err.Error())
+		logger.Error("generate token failed", err.Error())
 		return nil, errors.New("generate token failed")
 	}
 
@@ -145,7 +145,7 @@ func (s *UserService) issueTokenPair(
 		})
 	})
 	if err != nil {
-		logger.Error("save token failed:", err.Error())
+		logger.Error("save token failed", err.Error())
 		return nil, errors.New("save token failed")
 	}
 
@@ -155,15 +155,15 @@ func (s *UserService) issueTokenPair(
 func (s *UserService) List(ctx context.Context, params req.UserList) ([]resp.UserListItem, int, error) {
 	content, count, err := s.repo.List(ctx, params)
 	if err != nil {
-		logger.Error("Failed to retrieve the list: ", err.Error())
+		logger.Error("failed to retrieve the list", err.Error())
 		return nil, 0, errors.New("failed to retrieve the list")
 	}
 
 	return content, count, nil
 }
 
-func (s *UserService) Info(ctx context.Context, id int) (*resp.UserInfo, error) {
-	userInfo, err := s.repo.GetByID(ctx, id)
+func (s *UserService) Info(ctx context.Context, params req.InfoPathParams) (*resp.UserInfo, error) {
+	userInfo, err := s.repo.GetByID(ctx, params.ID)
 
 	if err != nil {
 		logger.Error("failed to get user info", err.Error())
@@ -228,7 +228,7 @@ func (s *UserService) Update(ctx context.Context, pathParams req.UserUpdatePathP
 
 	userInfo, err := s.repo.GetByID(ctx, pathParams.ID)
 	if err != nil {
-		logger.Error("get user failed:", err.Error())
+		logger.Error("get user failed", err.Error())
 		return errors.New("failed to get user info")
 	}
 	if userInfo == nil {
@@ -265,7 +265,7 @@ func (s *UserService) Update(ctx context.Context, pathParams req.UserUpdatePathP
 func (s *UserService) Delete(ctx context.Context, pathParams req.DeletePathParams) error {
 	userInfo, err := s.repo.GetByID(ctx, pathParams.ID)
 	if err != nil {
-		logger.Error("get user failed:", err.Error())
+		logger.Error("get user failed", err.Error())
 		return errors.New("failed to get user info")
 	}
 	if userInfo == nil {

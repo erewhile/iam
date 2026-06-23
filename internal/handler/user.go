@@ -163,7 +163,7 @@ func (h *UserHandler) Info(c *gin.Context) {
 	}
 
 	ctx := c.Request.Context()
-	info, err := h.srv.Info(ctx, pathParams.ID)
+	info, err := h.srv.Info(ctx, pathParams)
 	if err != nil {
 		response.Custom(c.Writer, http.StatusOK, err.Error())
 		return

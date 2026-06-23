@@ -156,14 +156,14 @@ func (h *UserHandler) List(c *gin.Context) {
 }
 
 func (h *UserHandler) Info(c *gin.Context) {
-	var pathParams req.InfoPathParams
-	if err := c.ShouldBindUri(&pathParams); err != nil {
+	var params req.InfoPathParams
+	if err := c.ShouldBindUri(&params); err != nil {
 		response.Fail(c.Writer, code.Parameter)
 		return
 	}
 
 	ctx := c.Request.Context()
-	info, err := h.srv.Info(ctx, pathParams)
+	info, err := h.srv.Info(ctx, params)
 	if err != nil {
 		response.Custom(c.Writer, http.StatusOK, err.Error())
 		return

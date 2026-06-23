@@ -25,8 +25,11 @@ func NewOAuthHandler(userService *service.UserService) *OAuthHandler {
 }
 
 func (h *OAuthHandler) Authorize(c *gin.Context) {
-	redirectURI := c.Query("redirect_uri")
-	clientID := c.Query("client_id")
+	var params req.Authorize
+	if err := c.ShouldBindQuery(&params); err != nil {
+		response.Fail(c.Writer, code.Parameter)
+		return
+	}
 
 	userID := c.GetInt(consts.MiddlewareUserID)
 
@@ -68,7 +71,7 @@ func (h *OAuthHandler) Authorize(c *gin.Context) {
 		UserID:    userID,
 		UserUUID:  userUUID,
 		SessionID: sessionID,
-		ClientID:  clientID,
+		ClientID:  params.ClientID,
 	})
 	if err != nil {
 		logger.Error("failed to save code to cache", err)
@@ -76,7 +79,7 @@ func (h *OAuthHandler) Authorize(c *gin.Context) {
 		return
 	}
 
-	targetURL := fmt.Sprintf("%s?code=%s", redirectURI, code)
+	targetURL := fmt.Sprintf("%s?code=%s", params.RedirectURI, code)
 	c.Redirect(http.StatusFound, targetURL)
 }
 

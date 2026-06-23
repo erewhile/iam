@@ -20,8 +20,8 @@ type UserRepository interface {
 	GetByUsername(ctx context.Context, username string) (*db.User, error)
 	Duplicate(ctx context.Context, username, email string, id ...int) (bool, error)
 	Create(ctx context.Context, params req.UserCreate, hashed string) (*db.User, error)
-	Update(ctx context.Context, pathParams req.UserUpdatePathParams, params req.UserUpdate, hashed string) (*db.User, error)
-	Delete(ctx context.Context, pathParams req.DeletePathParams) error
+	Update(ctx context.Context, params req.UserUpdatePathParams, body req.UserUpdate, hashed string) (*db.User, error)
+	Delete(ctx context.Context, params req.DeletePathParams) error
 }
 
 type userRepository struct {
@@ -174,11 +174,11 @@ func (r *userRepository) Create(ctx context.Context, params req.UserCreate, hash
 	return createRes, nil
 }
 
-func (r *userRepository) Update(ctx context.Context, pathParams req.UserUpdatePathParams, params req.UserUpdate, hashed string) (*db.User, error) {
-	builder := r.client.User.UpdateOneID(pathParams.UserID).
-		SetEmail(params.Email).
-		SetUsername(params.Username).
-		SetStatus(params.Status)
+func (r *userRepository) Update(ctx context.Context, params req.UserUpdatePathParams, body req.UserUpdate, hashed string) (*db.User, error) {
+	builder := r.client.User.UpdateOneID(params.UserID).
+		SetEmail(body.Email).
+		SetUsername(body.Username).
+		SetStatus(body.Status)
 
 	if hashed != "" {
 		builder.SetPasswordHash([]byte(hashed))
@@ -191,8 +191,8 @@ func (r *userRepository) Update(ctx context.Context, pathParams req.UserUpdatePa
 	return u, nil
 }
 
-func (r *userRepository) Delete(ctx context.Context, pathParams req.DeletePathParams) error {
-	return r.client.User.UpdateOneID(pathParams.ID).
+func (r *userRepository) Delete(ctx context.Context, params req.DeletePathParams) error {
+	return r.client.User.UpdateOneID(params.ID).
 		SetDeletedAt(utils.Now()).
 		SetStatus(model.UserStatusDisabled).
 		Exec(ctx)

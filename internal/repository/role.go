@@ -17,8 +17,8 @@ type RoleRepository interface {
 	Duplicate(ctx context.Context, name, code string, id ...int) (bool, error)
 	CountByIDs(ctx context.Context, ids []int) (int, error)
 	Create(ctx context.Context, params req.RoleCreate) (*db.Role, error)
-	Update(ctx context.Context, pathParams req.RoleUpdatePathParams, params req.RoleUpdate) (*db.Role, error)
-	Delete(ctx context.Context, pathParams req.DeletePathParams) error
+	Update(ctx context.Context, params req.RoleUpdatePathParams, body req.RoleUpdate) (*db.Role, error)
+	Delete(ctx context.Context, params req.DeletePathParams) error
 }
 
 type roleRepository struct {
@@ -143,10 +143,10 @@ func (r *roleRepository) Duplicate(ctx context.Context, name, code string, id ..
 	return exist, nil
 }
 
-func (r *roleRepository) Create(ctx context.Context, params req.RoleCreate) (*db.Role, error) {
+func (r *roleRepository) Create(ctx context.Context, body req.RoleCreate) (*db.Role, error) {
 	createRes, err := r.client.Role.Create().
-		SetCode(params.Code).
-		SetName(params.Name).
+		SetCode(body.Code).
+		SetName(body.Name).
 		Save(ctx)
 	if err != nil {
 		return nil, err
@@ -155,10 +155,10 @@ func (r *roleRepository) Create(ctx context.Context, params req.RoleCreate) (*db
 	return createRes, nil
 }
 
-func (r *roleRepository) Update(ctx context.Context, pathParams req.RoleUpdatePathParams, params req.RoleUpdate) (*db.Role, error) {
-	updateRes, err := r.client.Role.UpdateOneID(pathParams.RoleID).
-		SetName(params.Name).
-		SetCode(params.Code).
+func (r *roleRepository) Update(ctx context.Context, params req.RoleUpdatePathParams, body req.RoleUpdate) (*db.Role, error) {
+	updateRes, err := r.client.Role.UpdateOneID(params.RoleID).
+		SetName(body.Name).
+		SetCode(body.Code).
 		Save(ctx)
 	if err != nil {
 		return nil, err
@@ -167,8 +167,8 @@ func (r *roleRepository) Update(ctx context.Context, pathParams req.RoleUpdatePa
 	return updateRes, nil
 }
 
-func (r *roleRepository) Delete(ctx context.Context, pathParams req.DeletePathParams) error {
-	return r.client.Role.UpdateOneID(pathParams.ID).
+func (r *roleRepository) Delete(ctx context.Context, params req.DeletePathParams) error {
+	return r.client.Role.UpdateOneID(params.ID).
 		SetDeletedAt(utils.Now()).
 		Exec(ctx)
 }

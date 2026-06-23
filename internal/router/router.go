@@ -73,6 +73,15 @@ func Init(e *gin.Engine) {
 		roles.DELETE("/:id", app.Role.Delete)
 	}
 
+	applications := protected.Group("/applications")
+	{
+		applications.GET("", app.Application.List)
+		applications.GET("/:id", app.Application.Info)
+		applications.POST("", app.Application.Create)
+		applications.PUT("/:id", app.Application.Update)
+		applications.DELETE("/:id", app.Application.Delete)
+	}
+
 	e.NoRoute(func(c *gin.Context) {
 		response.NotFound(c.Writer)
 	})

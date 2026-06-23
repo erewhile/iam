@@ -282,8 +282,8 @@ func (s *UserService) Update(ctx context.Context, params req.UserUpdatePathParam
 	return nil
 }
 
-func (s *UserService) Delete(ctx context.Context, pathParams req.DeletePathParams) error {
-	_, err := s.repo.GetByID(ctx, pathParams.ID)
+func (s *UserService) Delete(ctx context.Context, params req.DeletePathParams) error {
+	_, err := s.repo.GetByID(ctx, params.ID)
 	if err != nil {
 		if db.IsNotFound(err) {
 			return errors.New("user not found")
@@ -293,7 +293,7 @@ func (s *UserService) Delete(ctx context.Context, pathParams req.DeletePathParam
 		return errors.New("failed to get user info")
 	}
 
-	if err := s.repo.Delete(ctx, pathParams); err != nil {
+	if err := s.repo.Delete(ctx, params); err != nil {
 		logger.Error("failed to delete user", err)
 		return errors.New("failed to delete user")
 	}

@@ -1,8 +1,6 @@
 package handler
 
 import (
-	"net/http"
-
 	"github.com/erewhile/iam/internal/dto/req"
 	"github.com/erewhile/iam/internal/dto/resp"
 	"github.com/erewhile/iam/internal/service"
@@ -29,7 +27,7 @@ func (h *RoleHandler) List(c *gin.Context) {
 	ctx := c.Request.Context()
 	content, count, err := h.srv.List(ctx, params)
 	if err != nil {
-		response.Custom(c.Writer, http.StatusOK, err.Error())
+		response.BadRequest(c.Writer, err.Error())
 		return
 	}
 
@@ -49,7 +47,7 @@ func (h *RoleHandler) Info(c *gin.Context) {
 	ctx := c.Request.Context()
 	info, err := h.srv.Info(ctx, params)
 	if err != nil {
-		response.Custom(c.Writer, http.StatusOK, err.Error())
+		response.BadRequest(c.Writer, err.Error())
 		return
 	}
 
@@ -65,7 +63,7 @@ func (h *RoleHandler) Create(c *gin.Context) {
 
 	ctx := c.Request.Context()
 	if err := h.srv.Create(ctx, body); err != nil {
-		response.Custom(c.Writer, http.StatusOK, err.Error())
+		response.BadRequest(c.Writer, err.Error())
 		return
 	}
 
@@ -87,7 +85,7 @@ func (h *RoleHandler) Update(c *gin.Context) {
 
 	ctx := c.Request.Context()
 	if err := h.srv.Update(ctx, params, body); err != nil {
-		response.Custom(c.Writer, http.StatusOK, err.Error())
+		response.BadRequest(c.Writer, err.Error())
 		return
 	}
 
@@ -103,7 +101,7 @@ func (h *RoleHandler) Delete(c *gin.Context) {
 
 	ctx := c.Request.Context()
 	if err := h.srv.Delete(ctx, params); err != nil {
-		response.Custom(c.Writer, http.StatusOK, err.Error())
+		response.BadRequest(c.Writer, err.Error())
 		return
 	}
 

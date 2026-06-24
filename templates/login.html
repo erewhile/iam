@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign In</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: #f4f6f9;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            color: #1f2328;
+            padding: 20px;
+        }
+
+        .login-card {
+            background: #ffffff;
+            padding: 40px 30px;
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(149, 157, 165, 0.15);
+            width: 100%;
+            max-width: 400px;
+            transition: transform 0.2s;
+        }
+
+        h1 {
+            font-size: 24px;
+            margin-bottom: 24px;
+            text-align: center;
+            color: #1f2328;
+            font-weight: 600;
+        }
+
+        #error-msg {
+            background-color: #ffebe9;
+            color: #1f2328;
+            padding: 10px 14px;
+            border-radius: 6px;
+            border: 1px solid #ffc1c0;
+            font-size: 14px;
+            margin-bottom: 20px;
+            word-break: break-all;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 14px;
+            margin-bottom: 8px;
+            color: #1f2328;
+            font-weight: 500;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 1px solid #d1d9e0;
+            border-radius: 6px;
+            font-size: 16px;
+            transition: all 0.2s ease;
+            outline: none;
+        }
+
+        .form-group input:focus {
+            border-color: #0969da;
+            background-color: #fff;
+            box-shadow: 0 0 0 3px rgba(9, 105, 218, 0.15);
+        }
+
+        #submitBtn {
+            width: 100%;
+            padding: 12px;
+            background-color: #1f883d;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            margin-top: 10px;
+        }
+
+        #submitBtn:hover {
+            background-color: #1c8139;
+        }
+
+        #submitBtn:active {
+            background-color: #1a7534;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="login-card">
+        <h1>Sign In</h1>
+        <p id="error-msg" style="display:none;"></p>
+
+        <form id="loginForm" onsubmit="return false;">
+            <input type="hidden" id="redirect" name="redirect" value="{{.Redirect}}">
+
+            <div class="form-group">
+                <label for="username">Username</label>
+                <input type="text" id="username" name="username" required autofocus autocomplete="username">
+            </div>
+
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" name="password" required autocomplete="current-password">
+            </div>
+
+            <button type="button" id="submitBtn">Sign In</button>
+        </form>
+    </div>
+
+    <script>
+        const loginForm = document.getElementById('loginForm');
+        const submitBtn = document.getElementById('submitBtn');
+        const errorEl = document.getElementById('error-msg');
+
+        async function doSubmit() {
+            errorEl.style.display = 'none';
+
+            const data = {
+                username: document.getElementById('username').value,
+                password: document.getElementById('password').value
+            };
+
+            if (!data.username.trim() || !data.password.trim()) {
+                errorEl.innerText = 'Username and password are required';
+                errorEl.style.display = 'block';
+                return;
+            }
+
+            try {
+                const response = await fetch("{{.LoginApiUrl}}", {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify(data)
+                });
+
+                if (response.ok) {
+                    document.getElementById('password').value = '';
+
+                    let redirectUrl = document.getElementById('redirect').value.trim();
+                    if (redirectUrl) {
+                        window.location.replace(decodeURIComponent(redirectUrl));
+                    } else {
+                        window.location.replace("/");
+                    }
+                } else {
+                    const resData = await response.json().catch(() => ({}));
+                    errorEl.innerText = resData.message || 'Sign in failed';
+                    errorEl.style.display = 'block';
+                }
+            } catch (err) {
+                errorEl.innerText = 'Network error';
+                errorEl.style.display = 'block';
+            }
+        }
+
+        submitBtn.addEventListener('click', doSubmit);
+
+        loginForm.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                doSubmit();
+            }
+        });
+    </script>
+</body>
+
+</html>

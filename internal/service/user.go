@@ -227,7 +227,7 @@ func (s *UserService) invalidateToken(ctx context.Context, sessionID uuid.UUID) 
 }
 
 func (s *UserService) StartSession(ctx context.Context, userID int, userUUID uuid.UUID) (string, error) {
-	sid, err := utils.GenerateRandomString(32)
+	sid, err := utils.RandomString(32)
 	if err != nil {
 		return "", err
 	}

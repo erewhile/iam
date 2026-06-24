@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/erewhile/iam/cmd/flags"
+	"github.com/erewhile/iam/internal/consts"
 	"github.com/erewhile/iam/pkg/utils"
 )
 
@@ -92,6 +93,14 @@ type Logger struct {
 	MaxAge     int    `json:"max_age"`
 }
 
+type CORS struct {
+	AllowOrigins     []string      `json:"allow_origins"`
+	AllowMethods     []string      `json:"allow_methods"`
+	AllowHeaders     []string      `json:"allow_headers"`
+	AllowCredentials bool          `json:"allow_credentials"`
+	MaxAge           time.Duration `json:"max_age"`
+}
+
 type Config struct {
 	Scheme   Scheme   `json:"scheme"`
 	Database Database `json:"database"`
@@ -100,6 +109,7 @@ type Config struct {
 	Aes      Aes      `json:"aes"`
 	Redis    Redis    `json:"redis"`
 	Logger   Logger   `json:"logger"`
+	CORS     CORS     `json:"cors"`
 }
 
 var (
@@ -114,6 +124,14 @@ func Get() *Config {
 
 func defaultConfig() *Config {
 	logsDir := filepath.Join(flags.Data, "logs")
+
+	mustGenKey := func() string {
+		if s, err := utils.RandomCryptoToken(32); err == nil {
+			return s
+		}
+
+		return "NSyUvnZzUJHLjPBKPhVkgRJwatMvBD+3"
+	}
 
 	return &Config{
 		Scheme: Scheme{
@@ -131,8 +149,8 @@ func defaultConfig() *Config {
 			MaxLifetime:  time.Hour,
 		},
 		Token: Token{
-			Kid:                   "erewhile-iam-public-key",
-			Aad:                   "30bAOV+0Upo+D3T7c9DPl/hah5ChhXy0",
+			Kid:                   "iam-key-" + consts.APIVersion,
+			Aad:                   mustGenKey(),
 			AccessTokenTTL:        5 * time.Minute,
 			AccessTokenCookieKey:  "atck",
 			RefreshTokenTTL:       24 * time.Hour,
@@ -140,10 +158,10 @@ func defaultConfig() *Config {
 		},
 		Session: Session{
 			CookieKey: "iam_sid",
-			CookieTTL: 12 * time.Hour,
+			CookieTTL: 8 * time.Hour,
 		},
 		Aes: Aes{
-			Key: "co1FsGScYJirTXZ+ymVm/mbZ+4Lhrep2",
+			Key: mustGenKey(),
 		},
 		Redis: Redis{
 			Addr:         "127.0.0.1:6379",
@@ -163,6 +181,13 @@ func defaultConfig() *Config {
 			MaxSize:    50,
 			MaxBackups: 10,
 			MaxAge:     24,
+		},
+		CORS: CORS{
+			AllowOrigins:     []string{"*"},
+			AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+			AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization"},
+			AllowCredentials: true,
+			MaxAge:           8 * time.Hour,
 		},
 	}
 }

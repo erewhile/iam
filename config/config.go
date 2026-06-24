@@ -92,6 +92,14 @@ type Logger struct {
 	MaxAge     int    `json:"max_age"`
 }
 
+type CORS struct {
+	AllowOrigins     []string      `json:"allow_origins"`
+	AllowMethods     []string      `json:"allow_methods"`
+	AllowHeaders     []string      `json:"allow_headers"`
+	AllowCredentials bool          `json:"allow_credentials"`
+	MaxAge           time.Duration `json:"max_age"`
+}
+
 type Config struct {
 	Scheme   Scheme   `json:"scheme"`
 	Database Database `json:"database"`
@@ -100,6 +108,7 @@ type Config struct {
 	Aes      Aes      `json:"aes"`
 	Redis    Redis    `json:"redis"`
 	Logger   Logger   `json:"logger"`
+	CORS     CORS     `json:"cors"`
 }
 
 var (
@@ -163,6 +172,13 @@ func defaultConfig() *Config {
 			MaxSize:    50,
 			MaxBackups: 10,
 			MaxAge:     24,
+		},
+		CORS: CORS{
+			AllowOrigins:     []string{"*"},
+			AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+			AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization"},
+			AllowCredentials: true,
+			MaxAge:           12 * time.Hour,
 		},
 	}
 }

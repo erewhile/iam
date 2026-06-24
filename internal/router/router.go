@@ -13,6 +13,8 @@ func Init(e *gin.Engine) {
 	client := database.GetDB()
 	app := wire.InitApp(client)
 
+	e.Use(middleware.CORS())
+
 	// JSON Web Key Set
 	e.GET("/.well-known/jwks.json", app.Cert.JWKS)
 

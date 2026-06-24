@@ -37,8 +37,8 @@ func NewUserService(
 	}
 }
 
-func (s *UserService) Login(ctx context.Context, param req.UserLogin) (*token.TokenPair, error) {
-	userInfo, err := s.repo.GetByUsername(ctx, param.Username)
+func (s *UserService) Login(ctx context.Context, body req.UserLogin) (*token.TokenPair, error) {
+	userInfo, err := s.repo.GetByUsername(ctx, body.Username)
 	if err != nil {
 		if db.IsNotFound(err) {
 			return nil, errors.New("user not found")
@@ -48,10 +48,10 @@ func (s *UserService) Login(ctx context.Context, param req.UserLogin) (*token.To
 	}
 
 	if userInfo.Status != model.UserStatusActive {
-		return nil, errors.New("account is disabled")
+		return nil, errors.New("account is not active")
 	}
 
-	ok, err := password.Validate(param.Password, string(userInfo.PasswordHash))
+	ok, err := password.Validate(body.Password, string(userInfo.PasswordHash))
 	if err != nil {
 		logger.Error("password check failed", err)
 		return nil, errors.New("password check failed, please try again later")
@@ -62,7 +62,7 @@ func (s *UserService) Login(ctx context.Context, param req.UserLogin) (*token.To
 	}
 
 	sessionID := uuid.New()
-	return s.issueTokenPair(ctx, userInfo.ID, userInfo.UUID, sessionID, param.RequestMeta)
+	return s.issueTokenPair(ctx, userInfo.ID, userInfo.UUID, sessionID, body.RequestMeta)
 }
 
 func (s *UserService) LoginWithOAuthCode(ctx context.Context, payload *rds.OAuthCodePayload, meta req.RequestMeta) (*token.TokenPair, error) {
@@ -71,9 +71,9 @@ func (s *UserService) LoginWithOAuthCode(ctx context.Context, payload *rds.OAuth
 
 func (s *UserService) Profile(ctx context.Context, userID int) {}
 
-func (s *UserService) Refresh(ctx context.Context, param req.UserRefresh) (*token.TokenPair, error) {
+func (s *UserService) Refresh(ctx context.Context, params req.UserRefresh) (*token.TokenPair, error) {
 	claims, payload, err := token.Validate(
-		param.Token,
+		params.Token,
 		[]byte(config.Get().Token.Aad),
 		token.TokenTypeRefresh,
 	)
@@ -87,6 +87,24 @@ func (s *UserService) Refresh(ctx context.Context, param req.UserRefresh) (*toke
 		return nil, errors.New("refresh token expired")
 	}
 
+	tokenHashed := hash.HashBlake2b256([]byte(params.Token))
+	if !s.isTokenValid(ctx, tokenHashed, model.TokenTypeRefresh) {
+		return nil, errors.New("refresh token revoked or not found")
+	}
+
+	userInfo, err := s.repo.GetByID(ctx, payload.UserID)
+	if err != nil {
+		if db.IsNotFound(err) {
+			return nil, errors.New("user not found")
+		}
+		logger.Error("refresh failed", err)
+		return nil, errors.New("refresh failed")
+	}
+
+	if userInfo.Status != model.UserStatusActive {
+		return nil, errors.New("account is not active")
+	}
+
 	_ = tokenCache.DelAccess(ctx, claims.SessionID)
 	_ = tokenCache.DelRefresh(ctx, claims.SessionID)
 
@@ -96,7 +114,7 @@ func (s *UserService) Refresh(ctx context.Context, param req.UserRefresh) (*toke
 	}
 
 	newSessionID := uuid.New()
-	return s.issueTokenPair(ctx, payload.UserID, payload.UserUUID, newSessionID, param.RequestMeta)
+	return s.issueTokenPair(ctx, payload.UserID, payload.UserUUID, newSessionID, params.RequestMeta)
 }
 
 func (s *UserService) Logout(ctx context.Context, sessionID uuid.UUID) error {
@@ -171,6 +189,11 @@ func (s *UserService) issueTokenPair(
 	_ = tokenCache.SetRefresh(ctx, sessionID, config.Get().Token.RefreshTokenTTL)
 
 	return tokenPair, nil
+}
+
+func (s *UserService) isTokenValid(ctx context.Context, hashed []byte, tt model.TokenType) bool {
+	_, err := s.token.GetIfValid(ctx, hashed, tt)
+	return err == nil
 }
 
 func (s *UserService) List(ctx context.Context, params req.UserList) ([]resp.UserListItem, int, error) {

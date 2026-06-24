@@ -7,6 +7,7 @@ import (
 	"github.com/erewhile/iam/internal/dto/resp"
 	"github.com/erewhile/iam/internal/ent/db"
 	"github.com/erewhile/iam/internal/ent/db/token"
+	"github.com/erewhile/iam/internal/model"
 	"github.com/erewhile/iam/pkg/utils"
 	"github.com/google/uuid"
 )
@@ -15,6 +16,7 @@ type TokenRepository interface {
 	List(ctx context.Context, params req.TokenList) ([]resp.TokenListItem, int, error)
 	Create(ctx context.Context, params req.TokenCreate) error
 	GetByID(ctx context.Context, id int) (*db.Token, error)
+	GetIfValid(ctx context.Context, hashed []byte, tokenType model.TokenType) (*db.Token, error)
 	RevokeByID(ctx context.Context, id int) error
 	RevokeBySession(ctx context.Context, sessionID uuid.UUID) error
 	RevokeByJTI(ctx context.Context, jti uuid.UUID) error
@@ -102,6 +104,21 @@ func (r *tokenRepository) GetByID(ctx context.Context, id int) (*db.Token, error
 	t, err := r.client.Token.Query().
 		Where(
 			token.IDEQ(id),
+			token.ExpiresAtGT(utils.Now()),
+			token.RevokedAtIsNil(),
+		).
+		Only(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return t, nil
+}
+
+func (r *tokenRepository) GetIfValid(ctx context.Context, hashed []byte, tokenType model.TokenType) (*db.Token, error) {
+	t, err := r.client.Token.Query().
+		Where(
+			token.TokenHashEQ(hashed),
+			token.TypeEQ(tokenType),
 			token.ExpiresAtGT(utils.Now()),
 			token.RevokedAtIsNil(),
 		).

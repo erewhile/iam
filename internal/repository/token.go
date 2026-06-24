@@ -22,6 +22,7 @@ type TokenRepository interface {
 	RevokeByJTI(ctx context.Context, jti uuid.UUID) error
 	RevokeAllByUser(ctx context.Context, userID int) error
 	ListActiveSessionsByUser(ctx context.Context, userID int) ([]uuid.UUID, error)
+	ClearExpiredOrRevoked(ctx context.Context) (int, error)
 }
 
 type tokenRepository struct {
@@ -190,4 +191,38 @@ func (r *tokenRepository) ListActiveSessionsByUser(ctx context.Context, userID i
 		return nil, err
 	}
 	return sessionIDs, nil
+}
+
+func (r *tokenRepository) ClearExpiredOrRevoked(ctx context.Context) (int, error) {
+	now := utils.Now()
+	batchSize := 1000
+
+	ids, err := r.client.Token.Query().
+		Where(
+			token.Or(
+				token.ExpiresAtLTE(now),
+				token.RevokedAtNotNil(),
+			),
+		).
+		Limit(batchSize).
+		Select(token.FieldID).
+		Ints(ctx)
+
+	if err != nil {
+		return 0, err
+	}
+
+	if len(ids) == 0 {
+		return 0, nil
+	}
+
+	affected, err := r.client.Token.Delete().
+		Where(token.IDIn(ids...)).
+		Exec(ctx)
+
+	if err != nil {
+		return 0, err
+	}
+
+	return affected, nil
 }

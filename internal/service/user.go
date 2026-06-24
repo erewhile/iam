@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/erewhile/iam/config"
 	"github.com/erewhile/iam/internal/cache/rds"
@@ -247,6 +248,7 @@ func (s *UserService) CheckSession(ctx context.Context, sid string) (userID int,
 	if err != nil || payload == nil {
 		return 0, uuid.Nil, false
 	}
+
 	return payload.UserID, payload.UserUUID, true
 }
 
@@ -363,6 +365,10 @@ func (s *UserService) Update(ctx context.Context, params req.UserUpdatePathParam
 		return errors.New("failed to update user")
 	}
 
+	if body.Status == model.UserStatusDisabled {
+		_ = s.InvalidateAllSessions(ctx, params.UserID)
+	}
+
 	return nil
 }
 
@@ -381,5 +387,25 @@ func (s *UserService) Delete(ctx context.Context, params req.DeletePathParams) e
 		logger.Error("failed to delete user", err)
 		return errors.New("failed to delete user")
 	}
+	return nil
+}
+
+func (s *UserService) InvalidateAllSessions(ctx context.Context, userID int) error {
+	if err := s.token.RevokeAllByUser(ctx, userID); err != nil {
+		return fmt.Errorf("revoke tokens failed: %w", err)
+	}
+
+	sessionIDs, err := s.token.ListActiveSessionsByUser(ctx, userID)
+	if err != nil {
+		logger.Error("list active sessions failed", err)
+	}
+	for _, sid := range sessionIDs {
+		s.invalidateToken(ctx, sid)
+	}
+
+	if err := s.sessionCache.DelAllByUser(ctx, userID); err != nil {
+		logger.Error("clear iam sessions failed", err)
+	}
+
 	return nil
 }

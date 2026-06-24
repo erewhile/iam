@@ -140,6 +140,28 @@ func (r *Redis) Exists(ctx context.Context, key string) (bool, error) {
 	return n > 0, nil
 }
 
+func (r *Redis) SAdd(ctx context.Context, key string, members ...any) error {
+	if err := r.client.SAdd(ctx, r.key(key), members...).Err(); err != nil {
+		return fmt.Errorf("sadd key %s: %w", key, err)
+	}
+	return nil
+}
+
+func (r *Redis) SMembers(ctx context.Context, key string) ([]string, error) {
+	sids, err := r.client.SMembers(ctx, r.key(key)).Result()
+	if err != nil {
+		return nil, fmt.Errorf("smembers key %s: %w", key, err)
+	}
+	return sids, nil
+}
+
+func (r *Redis) SRem(ctx context.Context, key string, members ...any) error {
+	if err := r.client.SRem(ctx, r.key(key), members...).Err(); err != nil {
+		return fmt.Errorf("srem key %s: %w", key, err)
+	}
+	return nil
+}
+
 func (r *Redis) SetJSON(ctx context.Context, key string, value any, ttl time.Duration) error {
 	b, err := json.Marshal(value)
 	if err != nil {
@@ -155,6 +177,13 @@ func (r *Redis) GetJSON(ctx context.Context, key string, dst any) error {
 	}
 	if err := json.Unmarshal([]byte(s), dst); err != nil {
 		return fmt.Errorf("unmarshal value for key %s: %w", key, err)
+	}
+	return nil
+}
+
+func (r *Redis) Expire(ctx context.Context, key string, ttl time.Duration) error {
+	if err := r.client.Expire(ctx, r.key(key), ttl).Err(); err != nil {
+		return fmt.Errorf("expire key %s: %w", key, err)
 	}
 	return nil
 }

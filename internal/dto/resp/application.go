@@ -4,7 +4,6 @@ type ApplicationListItem struct {
 	ID           int      `json:"id"`
 	Name         string   `json:"name"`
 	ClientID     string   `json:"client_id"`
-	ClientSecret string   `json:"client_secret"`
 	RedirectUris []string `json:"redirect_uris"`
 }
 
@@ -12,6 +11,5 @@ type ApplicationInfo struct {
 	ID           int      `json:"id"`
 	Name         string   `json:"name"`
 	ClientID     string   `json:"client_id"`
-	ClientSecret string   `json:"client_secret"`
 	RedirectUris []string `json:"redirect_uris"`
 }

@@ -5,7 +5,6 @@ import (
 	"entgo.io/ent/dialect/entsql"
 	"entgo.io/ent/schema"
 	"entgo.io/ent/schema/field"
-	"entgo.io/ent/schema/index"
 	"github.com/erewhile/iam/internal/ent/mixin"
 )
 
@@ -34,12 +33,16 @@ func (Application) Fields() []ent.Field {
 			MaxLen(36).
 			NotEmpty(),
 
-		field.String("client_secret").
+		field.Bytes("client_secret").
 			NotEmpty().
-			MinLen(32).
-			MaxLen(64),
+			Unique().
+			MaxLen(32).
+			SchemaType(map[string]string{
+				"mysql": "binary(32)",
+			}),
 
 		field.String("name").
+			Unique().
 			NotEmpty().
 			MaxLen(64),
 
@@ -60,7 +63,5 @@ func (Application) Edges() []ent.Edge {
 }
 
 func (Application) Indexes() []ent.Index {
-	return []ent.Index{
-		index.Fields("client_id").Unique(),
-	}
+	return nil
 }

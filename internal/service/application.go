@@ -43,7 +43,6 @@ func (s *ApplicationService) Info(ctx context.Context, params req.InfoPathParams
 		ID:           applicationInfo.ID,
 		Name:         applicationInfo.Name,
 		ClientID:     applicationInfo.ClientID,
-		ClientSecret: applicationInfo.ClientSecret,
 		RedirectUris: applicationInfo.RedirectUris,
 	}, nil
 }

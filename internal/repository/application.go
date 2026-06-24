@@ -7,6 +7,7 @@ import (
 	"github.com/erewhile/iam/internal/dto/resp"
 	"github.com/erewhile/iam/internal/ent/db"
 	"github.com/erewhile/iam/internal/ent/db/application"
+	"github.com/erewhile/iam/pkg/hash"
 	"github.com/erewhile/iam/pkg/utils"
 )
 
@@ -69,11 +70,10 @@ func (r *applicationRepository) List(ctx context.Context, params req.Application
 	result := make([]resp.ApplicationListItem, 0, len(applications))
 	for _, item := range applications {
 		result = append(result, resp.ApplicationListItem{
-			ID:           item.ID,
-			Name:         item.Name,
-			ClientID:     item.ClientID,
-			ClientSecret: item.ClientSecret,
-			RedirectUris: item.RedirectUris,
+			ID:              item.ID,
+			Name:            item.Name,
+			ClientID:        item.ClientID,
+			RedirectUris:    item.RedirectUris,
 		})
 	}
 
@@ -117,7 +117,7 @@ func (r *applicationRepository) Duplicate(ctx context.Context, name, clientID, c
 			application.Or(
 				application.NameEQ(name),
 				application.ClientIDEQ(clientID),
-				application.ClientSecretEQ(clientSecret),
+				application.ClientSecretEQ(hash.HashBlake2b256([]byte(clientSecret))),
 			),
 		)
 
@@ -137,7 +137,7 @@ func (r *applicationRepository) Create(ctx context.Context, body req.Application
 	createRes, err := r.client.Application.Create().
 		SetName(body.Name).
 		SetClientID(body.ClientID).
-		SetClientSecret(body.ClientSecret).
+		SetClientSecret(hash.HashBlake2b256([]byte(body.ClientSecret))).
 		SetRedirectUris(body.RedirectUris).
 		Save(ctx)
 	if err != nil {
@@ -151,7 +151,7 @@ func (r *applicationRepository) Update(ctx context.Context, params req.Applicati
 	updateRes, err := r.client.Application.UpdateOneID(params.ApplicationID).
 		SetName(body.Name).
 		SetClientID(body.ClientID).
-		SetClientSecret(body.ClientSecret).
+		SetClientSecret(hash.HashBlake2b256([]byte(body.ClientSecret))).
 		SetRedirectUris(body.RedirectUris).
 		Save(ctx)
 	if err != nil {

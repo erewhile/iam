@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -17,17 +18,38 @@ import (
 )
 
 type OAuthHandler struct {
-	userService *service.UserService
+	userService  *service.UserService
+	oauthService *service.OAuthService
+	cache        rds.TokenCache
 }
 
-func NewOAuthHandler(userService *service.UserService) *OAuthHandler {
-	return &OAuthHandler{userService}
+func NewOAuthHandler(
+	userService *service.UserService,
+	oauthService *service.OAuthService,
+	cache rds.TokenCache,
+) *OAuthHandler {
+	return &OAuthHandler{userService, oauthService, cache}
 }
 
 func (h *OAuthHandler) Authorize(c *gin.Context) {
 	var params req.Authorize
 	if err := c.ShouldBindQuery(&params); err != nil {
 		response.Fail(c.Writer, code.Parameter)
+		return
+	}
+
+	ctx := c.Request.Context()
+
+	if _, err := h.oauthService.ValidateAuthorize(ctx, params.ClientID, params.RedirectURI); err != nil {
+		switch {
+		case errors.Is(err, service.ErrClientNotFound):
+			response.BadRequest(c.Writer, "invalid client_id")
+		case errors.Is(err, service.ErrRedirectURIInvalid):
+			response.BadRequest(c.Writer, "redirect_uri not registered")
+		default:
+			logger.Error("validate authorize failed", err)
+			response.InternalServer(c.Writer)
+		}
 		return
 	}
 
@@ -59,15 +81,14 @@ func (h *OAuthHandler) Authorize(c *gin.Context) {
 		return
 	}
 
-	code, err := utils.GenerateRandomString(32)
+	authCode, err := utils.GenerateRandomString(32)
 	if err != nil {
 		logger.Error("failed to generate oauth code", err)
 		response.InternalServer(c.Writer)
 		return
 	}
 
-	tokenCache := rds.NewTokenCache()
-	err = tokenCache.SetCode(c.Request.Context(), code, rds.OAuthCodePayload{
+	err = h.cache.SetCode(ctx, authCode, rds.OAuthCodePayload{
 		UserID:    userID,
 		UserUUID:  userUUID,
 		SessionID: sessionID,
@@ -79,7 +100,7 @@ func (h *OAuthHandler) Authorize(c *gin.Context) {
 		return
 	}
 
-	targetURL := fmt.Sprintf("%s?code=%s", params.RedirectURI, code)
+	targetURL := fmt.Sprintf("%s?code=%s", params.RedirectURI, authCode)
 	c.Redirect(http.StatusFound, targetURL)
 }
 
@@ -91,9 +112,19 @@ func (h *OAuthHandler) ExchangeToken(c *gin.Context) {
 	}
 
 	ctx := c.Request.Context()
-	tokenCache := rds.NewTokenCache()
 
-	payload, err := tokenCache.GetAndDelCode(ctx, params.Code)
+	if _, err := h.oauthService.ValidateClient(ctx, params.ClientID, params.ClientSecret); err != nil {
+		switch {
+		case errors.Is(err, service.ErrClientNotFound), errors.Is(err, service.ErrClientSecretWrong):
+			response.BadRequest(c.Writer, "invalid client credentials")
+		default:
+			logger.Error("validate client failed", err)
+			response.InternalServer(c.Writer)
+		}
+		return
+	}
+
+	payload, err := h.cache.GetAndDelCode(ctx, params.Code)
 	if err != nil {
 		response.BadRequest(c.Writer, "invalid or expired code")
 		return

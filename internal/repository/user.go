@@ -132,9 +132,6 @@ func (r *userRepository) GetByUsername(ctx context.Context, username string) (*d
 		).
 		Only(ctx)
 	if err != nil {
-		if db.IsNotFound(err) {
-			return nil, nil
-		}
 		return nil, err
 	}
 	return userInfo, nil

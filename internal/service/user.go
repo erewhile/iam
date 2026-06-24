@@ -23,17 +23,20 @@ type UserService struct {
 	repo       repository.UserRepository
 	token      repository.TokenRepository
 	transactor *repository.Transactor
+	cache      rds.TokenCache
 }
 
 func NewUserService(
 	repo repository.UserRepository,
 	token repository.TokenRepository,
 	transactor *repository.Transactor,
+	cache rds.TokenCache,
 ) *UserService {
 	return &UserService{
 		repo:       repo,
 		token:      token,
 		transactor: transactor,
+		cache:      cache,
 	}
 }
 
@@ -89,12 +92,14 @@ func (s *UserService) Refresh(ctx context.Context, params req.UserRefresh) (*tok
 
 	tokenHashed := hash.HashBlake2b256([]byte(params.Token))
 	if !s.isTokenValid(ctx, tokenHashed, model.TokenTypeRefresh) {
+		s.invalidateSession(ctx, claims.SessionID)
 		return nil, errors.New("refresh token revoked or not found")
 	}
 
 	userInfo, err := s.repo.GetByID(ctx, payload.UserID)
 	if err != nil {
 		if db.IsNotFound(err) {
+			s.invalidateSession(ctx, claims.SessionID)
 			return nil, errors.New("user not found")
 		}
 		logger.Error("refresh failed", err)
@@ -102,25 +107,23 @@ func (s *UserService) Refresh(ctx context.Context, params req.UserRefresh) (*tok
 	}
 
 	if userInfo.Status != model.UserStatusActive {
+		s.invalidateSession(ctx, claims.SessionID)
 		return nil, errors.New("account is not active")
 	}
-
-	_ = tokenCache.DelAccess(ctx, claims.SessionID)
-	_ = tokenCache.DelRefresh(ctx, claims.SessionID)
 
 	if err := s.token.RevokeBySession(ctx, claims.SessionID); err != nil {
 		logger.Error("revoke failed", err)
 		return nil, errors.New("revoke failed")
 	}
 
+	s.invalidateSession(ctx, claims.SessionID)
+
 	newSessionID := uuid.New()
 	return s.issueTokenPair(ctx, payload.UserID, payload.UserUUID, newSessionID, params.RequestMeta)
 }
 
 func (s *UserService) Logout(ctx context.Context, sessionID uuid.UUID) error {
-	tokenCache := rds.NewTokenCache()
-	_ = tokenCache.DelAccess(ctx, sessionID)
-	_ = tokenCache.DelRefresh(ctx, sessionID)
+	s.invalidateSession(ctx, sessionID)
 
 	if err := s.token.RevokeBySession(ctx, sessionID); err != nil {
 		logger.Error("logout failed", err)
@@ -194,6 +197,15 @@ func (s *UserService) issueTokenPair(
 func (s *UserService) isTokenValid(ctx context.Context, hashed []byte, tt model.TokenType) bool {
 	_, err := s.token.GetIfValid(ctx, hashed, tt)
 	return err == nil
+}
+
+func (s *UserService) invalidateSession(ctx context.Context, sessionID uuid.UUID) {
+	if err := s.cache.DelAccess(ctx, sessionID); err != nil {
+		logger.Error("del access cache failed", err)
+	}
+	if err := s.cache.DelRefresh(ctx, sessionID); err != nil {
+		logger.Error("del refresh cache failed", err)
+	}
 }
 
 func (s *UserService) List(ctx context.Context, params req.UserList) ([]resp.UserListItem, int, error) {

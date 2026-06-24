@@ -4,6 +4,7 @@
 package wire
 
 import (
+	"github.com/erewhile/iam/internal/cache/rds"
 	"github.com/erewhile/iam/internal/ent/db"
 	"github.com/erewhile/iam/internal/handler"
 	"github.com/erewhile/iam/internal/repository"
@@ -36,6 +37,7 @@ var ServiceSet = wire.NewSet(
 	service.NewRoleService,
 	service.NewTokenService,
 	service.NewApplicationService,
+	rds.NewTokenCache,
 )
 
 var HandlerSet = wire.NewSet(

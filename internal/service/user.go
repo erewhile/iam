@@ -68,7 +68,12 @@ func (s *UserService) Login(ctx context.Context, body req.UserLogin) (*token.Tok
 	}
 
 	sessionID := uuid.New()
-	tokenPair, err := s.issueTokenPair(ctx, userInfo.ID, userInfo.UUID, sessionID, body.RequestMeta)
+	userPayload := token.UserPayload{
+		UserID:   userInfo.ID,
+		UserUUID: userInfo.UUID,
+	}
+
+	tokenPair, err := s.issueTokenPair(ctx, userPayload, sessionID, body.RequestMeta)
 	if err != nil {
 		return nil, "", err
 	}
@@ -83,7 +88,11 @@ func (s *UserService) Login(ctx context.Context, body req.UserLogin) (*token.Tok
 }
 
 func (s *UserService) LoginWithOAuthCode(ctx context.Context, payload *rds.OAuthCodePayload, meta req.RequestMeta) (*token.TokenPair, error) {
-	return s.issueTokenPair(ctx, payload.UserID, payload.UserUUID, payload.SessionID, meta)
+	userPayload := token.UserPayload{
+		UserID:   payload.UserID,
+		UserUUID: payload.SessionID,
+	}
+	return s.issueTokenPair(ctx, userPayload, payload.SessionID, meta)
 }
 
 func (s *UserService) Profile(ctx context.Context, userID int) {}
@@ -132,7 +141,11 @@ func (s *UserService) Refresh(ctx context.Context, params req.UserRefresh) (*tok
 	s.invalidateToken(ctx, claims.SessionID)
 
 	newSessionID := uuid.New()
-	return s.issueTokenPair(ctx, payload.UserID, payload.UserUUID, newSessionID, params.RequestMeta)
+	userPayload := token.UserPayload{
+		UserID:   payload.UserID,
+		UserUUID: payload.UserUUID,
+	}
+	return s.issueTokenPair(ctx, userPayload, newSessionID, params.RequestMeta)
 }
 
 func (s *UserService) Logout(ctx context.Context, sessionID uuid.UUID, iamSID string) error {
@@ -153,14 +166,12 @@ func (s *UserService) Logout(ctx context.Context, sessionID uuid.UUID, iamSID st
 
 func (s *UserService) issueTokenPair(
 	ctx context.Context,
-	userID int,
-	userUUID uuid.UUID,
+	userPayload token.UserPayload,
 	sessionID uuid.UUID,
 	meta req.RequestMeta,
 ) (*token.TokenPair, error) {
 	tokenPair, err := token.Generate(
-		userID,
-		userUUID,
+		userPayload,
 		sessionID,
 		[]byte(config.Get().Token.Aad),
 	)
@@ -178,7 +189,7 @@ func (s *UserService) issueTokenPair(
 		txTokenRepo := repository.NewTokenRepository(txClient)
 
 		if err := txTokenRepo.Create(ctx, req.TokenCreate{
-			UserID:    userID,
+			UserID:    userPayload.UserID,
 			Jti:       accessJti,
 			SessionID: sessionID,
 			Type:      model.TokenTypeAccess,
@@ -191,7 +202,7 @@ func (s *UserService) issueTokenPair(
 		}
 
 		return txTokenRepo.Create(ctx, req.TokenCreate{
-			UserID:    userID,
+			UserID:    userPayload.UserID,
 			Jti:       refreshJti,
 			SessionID: sessionID,
 			Type:      model.TokenTypeRefresh,
@@ -329,7 +340,7 @@ func (s *UserService) Create(ctx context.Context, body req.UserCreate) error {
 		return errors.New("failed to hash password")
 	}
 
-	_, err = s.repo.Create(ctx, body, hashed)
+	_, err = s.repo.Create(ctx, body, hashed, model.UserStandard)
 	if err != nil {
 		logger.Error("failed to create user", err)
 		return errors.New("failed to create user")
@@ -388,7 +399,7 @@ func (s *UserService) Update(ctx context.Context, params req.UserUpdatePathParam
 }
 
 func (s *UserService) Delete(ctx context.Context, params req.DeletePathParams) error {
-	_, err := s.repo.GetByID(ctx, params.ID)
+	userInfo, err := s.repo.GetByID(ctx, params.ID)
 	if err != nil {
 		if db.IsNotFound(err) {
 			return errors.New("user not found")
@@ -396,6 +407,10 @@ func (s *UserService) Delete(ctx context.Context, params req.DeletePathParams) e
 		}
 		logger.Error("get user failed", err)
 		return errors.New("failed to get user info")
+	}
+
+	if userInfo.IsSystem {
+		return errors.New("the system cannot delete")
 	}
 
 	if err := s.repo.Delete(ctx, params); err != nil {

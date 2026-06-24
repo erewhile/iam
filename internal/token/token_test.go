@@ -16,7 +16,7 @@ func TestEncryptedToken(t *testing.T) {
 	userUUID := uuid.New()
 	myAAD := []byte("iam_token_v1")
 
-	tokenPair, err := Generate(userID, userUUID, uuid.Nil, myAAD)
+	tokenPair, err := Generate(UserPayload{UserID: userID, UserUUID: userUUID}, uuid.Nil, myAAD)
 	if err != nil {
 		t.Fatalf("bummer! failed to mint token: %v", err)
 	}

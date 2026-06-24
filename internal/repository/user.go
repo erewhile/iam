@@ -19,7 +19,7 @@ type UserRepository interface {
 	GetByEmail(ctx context.Context, email string) (*db.User, error)
 	GetByUsername(ctx context.Context, username string) (*db.User, error)
 	Duplicate(ctx context.Context, username, email string, id ...int) (bool, error)
-	Create(ctx context.Context, params req.UserCreate, hashed string) (*db.User, error)
+	Create(ctx context.Context, params req.UserCreate, passwordHash string, isSystem bool) (*db.User, error)
 	Update(ctx context.Context, params req.UserUpdatePathParams, body req.UserUpdate, hashed string) (*db.User, error)
 	Delete(ctx context.Context, params req.DeletePathParams) error
 }
@@ -158,12 +158,13 @@ func (r *userRepository) Duplicate(ctx context.Context, username, email string, 
 	return exist, nil
 }
 
-func (r *userRepository) Create(ctx context.Context, params req.UserCreate, hashed string) (*db.User, error) {
+func (r *userRepository) Create(ctx context.Context, params req.UserCreate, passwordHash string, isSystem bool) (*db.User, error) {
 	createRes, err := r.client.User.Create().
 		SetEmail(params.Email).
 		SetUsername(params.Username).
-		SetPasswordHash([]byte(hashed)).
+		SetPasswordHash([]byte(passwordHash)).
 		SetStatus(params.Status).
+		SetIsSystem(isSystem).
 		Save(ctx)
 	if err != nil {
 		return nil, err

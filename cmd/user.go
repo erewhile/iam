@@ -63,7 +63,7 @@ func runUserAdd(cmd *cobra.Command, args []string) error {
 		Email:    addUserEmail,
 		Username: addUserUsername,
 		Status:   model.UserStatusActive,
-	}, hashed)
+	}, hashed, model.UserSystem)
 	if err != nil {
 		return fmt.Errorf("failed to create user: %w", err)
 	}

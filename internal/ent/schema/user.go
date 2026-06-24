@@ -58,6 +58,10 @@ func (User) Fields() []ent.Field {
 		field.Uint8("status").
 			GoType(model.UserStatus(0)).
 			Default(uint8(model.UserStatusPending)),
+
+		field.Bool("is_system").
+			Immutable().
+			Default(false),
 	}
 }
 

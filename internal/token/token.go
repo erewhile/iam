@@ -132,17 +132,16 @@ func Validate(
 		return nil, nil, fmt.Errorf("failed to decrypt payload: %w", err)
 	}
 
-	var payload UserPayload
-	if err := json.Unmarshal(decryptedPayload, &payload); err != nil {
+	var userPayload UserPayload
+	if err := json.Unmarshal(decryptedPayload, &userPayload); err != nil {
 		return nil, nil, fmt.Errorf("failed to unmarshal decrypted payload: %w", err)
 	}
 
-	return claims, &payload, nil
+	return claims, &userPayload, nil
 }
 
 func Generate(
-	userID int,
-	userUUID uuid.UUID,
+	userPayload UserPayload,
 	sessionID uuid.UUID,
 	aad []byte,
 ) (*TokenPair, error) {
@@ -160,8 +159,8 @@ func Generate(
 	refreshJTI, _ := uuid.NewRandom()
 
 	accessStr, err := generate(
-		userID,
-		userUUID,
+		userPayload.UserID,
+		userPayload.UserUUID,
 		sessionID,
 		aad,
 		TokenTypeAccess,
@@ -173,8 +172,8 @@ func Generate(
 	}
 
 	refreshStr, err := generate(
-		userID,
-		userUUID,
+		userPayload.UserID,
+		userPayload.UserUUID,
 		sessionID,
 		aad,
 		TokenTypeRefresh,

@@ -1,6 +1,7 @@
 package router
 
 import (
+	"github.com/erewhile/iam/internal/consts"
 	"github.com/erewhile/iam/internal/database"
 	"github.com/erewhile/iam/internal/middleware"
 	"github.com/erewhile/iam/internal/wire"
@@ -15,33 +16,27 @@ func Init(e *gin.Engine) {
 	// JSON Web Key Set
 	e.GET("/.well-known/jwks.json", app.Cert.JWKS)
 
-	api := e.Group("/api/v1")
+	api := e.Group(consts.APIBase)
 
 	// Public auth endpoints
 	auth := api.Group("/auth")
 	{
+		auth.GET("/login", app.User.ShowLogin)
 		auth.POST("/login", app.User.Login)
 		auth.POST("/refresh", app.User.Refresh)
 	}
 
-	oauthPublic := api.Group("/oauth")
+	oauth := api.Group("/oauth")
 	{
-		oauthPublic.POST("/token", app.OAuth.ExchangeToken)
+		oauth.GET("/authorize", app.OAuth.Authorize)
+		oauth.POST("/token", app.OAuth.ExchangeToken)
 	}
 
 	// Protected routes
 	protected := api.Group("")
 	protected.Use(middleware.Auth())
 
-	protectedAuth := protected.Group("/auth")
-	{
-		protectedAuth.POST("/logout", app.User.Logout)
-	}
-
-	oauthProtected := protected.Group("/oauth")
-	{
-		oauthProtected.GET("/authorize", app.OAuth.Authorize)
-	}
+	protected.POST("/auth/logout", app.User.Logout)
 
 	users := protected.Group("/users")
 	{

@@ -54,12 +54,17 @@ func (d *Database) DSN() string {
 }
 
 type Token struct {
-	Kid                   string `json:"kid"`
-	Aad                   string `json:"aad"`
-	AccessTokenTTL        time.Duration
-	AccessTokenCookieKey  string
-	RefreshTokenTTL       time.Duration
-	RefreshTokenCookieKey string
+	Kid                   string        `json:"kid"`
+	Aad                   string        `json:"aad"`
+	AccessTokenTTL        time.Duration `json:"access_token_ttl"`
+	AccessTokenCookieKey  string        `json:"access_token_cookie_key"`
+	RefreshTokenTTL       time.Duration `json:"refresh_token_ttl"`
+	RefreshTokenCookieKey string        `json:"refresh_token_cookie_key"`
+}
+
+type Session struct {
+	CookieKey string        `json:"cookie_key"`
+	CookieTTL time.Duration `json:"cookie_ttl"`
 }
 
 type Aes struct {
@@ -91,6 +96,7 @@ type Config struct {
 	Scheme   Scheme   `json:"scheme"`
 	Database Database `json:"database"`
 	Token    Token    `json:"token"`
+	Session  Session  `json:"session"`
 	Aes      Aes      `json:"aes"`
 	Redis    Redis    `json:"redis"`
 	Logger   Logger   `json:"logger"`
@@ -131,6 +137,10 @@ func defaultConfig() *Config {
 			AccessTokenCookieKey:  "atck",
 			RefreshTokenTTL:       24 * time.Hour,
 			RefreshTokenCookieKey: "rtck",
+		},
+		Session: Session{
+			CookieKey: "iam_sid",
+			CookieTTL: 12 * time.Hour,
 		},
 		Aes: Aes{
 			Key: "co1FsGScYJirTXZ+ymVm/mbZ+4Lhrep2",

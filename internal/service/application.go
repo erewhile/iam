@@ -16,7 +16,7 @@ type ApplicationService struct {
 }
 
 func NewApplicationService(repo repository.ApplicationRepository) *ApplicationService {
-	return &ApplicationService{repo}
+	return &ApplicationService{repo: repo}
 }
 
 func (s *ApplicationService) List(ctx context.Context, params req.ApplicationList) ([]resp.ApplicationListItem, int, error) {

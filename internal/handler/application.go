@@ -16,7 +16,7 @@ type ApplicationHandler struct {
 }
 
 func NewApplicationHandler(srv *service.ApplicationService) *ApplicationHandler {
-	return &ApplicationHandler{srv}
+	return &ApplicationHandler{srv: srv}
 }
 
 func (h *ApplicationHandler) List(c *gin.Context) {

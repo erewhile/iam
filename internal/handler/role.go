@@ -16,7 +16,7 @@ type RoleHandler struct {
 }
 
 func NewRoleHandler(srv *service.RoleService) *RoleHandler {
-	return &RoleHandler{srv}
+	return &RoleHandler{srv: srv}
 }
 
 func (h *RoleHandler) List(c *gin.Context) {

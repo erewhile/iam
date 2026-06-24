@@ -39,6 +39,7 @@ var ServiceSet = wire.NewSet(
 	service.NewApplicationService,
 	rds.NewTokenCache,
 	service.NewOAuthService,
+	rds.NewIAMSessionCache,
 )
 
 var HandlerSet = wire.NewSet(

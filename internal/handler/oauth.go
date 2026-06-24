@@ -2,9 +2,11 @@ package handler
 
 import (
 	"errors"
-	"fmt"
 	"net/http"
+	"net/url"
 
+	"github.com/erewhile/iam/cmd/flags"
+	"github.com/erewhile/iam/config"
 	"github.com/erewhile/iam/internal/cache/rds"
 	"github.com/erewhile/iam/internal/consts"
 	"github.com/erewhile/iam/internal/dto/req"
@@ -26,9 +28,13 @@ type OAuthHandler struct {
 func NewOAuthHandler(
 	userService *service.UserService,
 	oauthService *service.OAuthService,
-	cache rds.TokenCache,
+	tokenCache rds.TokenCache,
 ) *OAuthHandler {
-	return &OAuthHandler{userService, oauthService, cache}
+	return &OAuthHandler{
+		userService:  userService,
+		oauthService: oauthService,
+		cache:        tokenCache,
+	}
 }
 
 func (h *OAuthHandler) Authorize(c *gin.Context) {
@@ -53,34 +59,16 @@ func (h *OAuthHandler) Authorize(c *gin.Context) {
 		return
 	}
 
-	userID := c.GetInt(consts.MiddlewareUserID)
-
-	uuidVal, exists := c.Get(consts.MiddlewareUserUUID)
-	if !exists {
-		response.Custom(c.Writer, http.StatusOK, "missing uuid")
-		c.Abort()
-		return
-	}
-	userUUID, ok := uuidVal.(uuid.UUID)
+	cookieUtil := utils.NewCookieUtil(!flags.Debug)
+	sid, _ := cookieUtil.Get(c.Request, config.Get().Session.CookieKey)
+	userID, userUUID, ok := h.userService.CheckSession(ctx, sid)
 	if !ok {
-		response.Custom(c.Writer, http.StatusOK, "invalid uuid type")
-		c.Abort()
+		v := url.Values{}
+		v.Set("redirect", c.Request.URL.RequestURI())
+		loginURL := consts.AuthLoginPath + "?" + v.Encode()
+		c.Redirect(http.StatusFound, loginURL)
 		return
 	}
-
-	sessionIDVal, exists := c.Get(consts.MiddlewareSessionID)
-	if !exists {
-		response.Custom(c.Writer, http.StatusOK, "missing session id")
-		c.Abort()
-		return
-	}
-	sessionID, ok := sessionIDVal.(uuid.UUID)
-	if !ok {
-		response.Custom(c.Writer, http.StatusOK, "invalid session id type")
-		c.Abort()
-		return
-	}
-
 	authCode, err := utils.GenerateRandomString(32)
 	if err != nil {
 		logger.Error("failed to generate oauth code", err)
@@ -88,20 +76,30 @@ func (h *OAuthHandler) Authorize(c *gin.Context) {
 		return
 	}
 
-	err = h.cache.SetCode(ctx, authCode, rds.OAuthCodePayload{
+	appSessionID := uuid.New()
+
+	if err := h.cache.SetCode(ctx, authCode, rds.OAuthCodePayload{
 		UserID:    userID,
 		UserUUID:  userUUID,
-		SessionID: sessionID,
+		SessionID: appSessionID,
 		ClientID:  params.ClientID,
-	})
-	if err != nil {
+	}); err != nil {
 		logger.Error("failed to save code to cache", err)
 		response.InternalServer(c.Writer)
 		return
 	}
 
-	targetURL := fmt.Sprintf("%s?code=%s", params.RedirectURI, authCode)
-	c.Redirect(http.StatusFound, targetURL)
+	target, err := url.Parse(params.RedirectURI)
+	if err != nil {
+		logger.Error("invalid redirect_uri", err)
+		response.InternalServer(c.Writer)
+		return
+	}
+	q := target.Query()
+	q.Set("code", authCode)
+	target.RawQuery = q.Encode()
+
+	c.Redirect(http.StatusFound, target.String())
 }
 
 func (h *OAuthHandler) ExchangeToken(c *gin.Context) {
@@ -135,8 +133,8 @@ func (h *OAuthHandler) ExchangeToken(c *gin.Context) {
 		return
 	}
 
-	mockMeta := req.GetRequestMeta(c.Request)
-	tokenPair, err := h.userService.LoginWithOAuthCode(ctx, payload, mockMeta)
+	meta := req.GetRequestMeta(c.Request)
+	tokenPair, err := h.userService.LoginWithOAuthCode(ctx, payload, meta)
 	if err != nil {
 		response.Custom(c.Writer, http.StatusInternalServerError, "failed to issue token")
 		return

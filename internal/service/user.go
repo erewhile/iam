@@ -249,6 +249,21 @@ func (s *UserService) CheckSession(ctx context.Context, sid string) (userID int,
 		return 0, uuid.Nil, false
 	}
 
+	totalTTL := config.Get().Session.CookieTTL
+	now := utils.Now().Unix()
+	remainingTime := payload.ExpiredAt - now
+	halfTTL := int64(totalTTL.Seconds() / 2)
+
+	if remainingTime < halfTTL {
+		asyncCtx := context.Background()
+
+		go func(p rds.IAMSessionPayload) {
+			if err := s.sessionCache.Refresh(asyncCtx, sid, &p, totalTTL); err != nil {
+				logger.Error(fmt.Sprintf("async refresh session failed for sid: %s", sid), err)
+			}
+		}(*payload)
+	}
+
 	return payload.UserID, payload.UserUUID, true
 }
 

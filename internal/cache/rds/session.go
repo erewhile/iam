@@ -8,13 +8,15 @@ import (
 
 	"github.com/erewhile/iam/internal/consts"
 	"github.com/erewhile/iam/internal/logger"
+	"github.com/erewhile/iam/pkg/utils"
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 )
 
 type IAMSessionPayload struct {
-	UserID   int       `json:"user_id"`
-	UserUUID uuid.UUID `json:"user_uuid"`
+	UserID    int       `json:"user_id"`
+	UserUUID  uuid.UUID `json:"user_uuid"`
+	ExpiredAt int64     `json:"expired_at"`
 }
 
 type IAMSessionCache interface {
@@ -22,6 +24,7 @@ type IAMSessionCache interface {
 	Get(ctx context.Context, sid string) (*IAMSessionPayload, error)
 	Del(ctx context.Context, sid string) error
 	DelAllByUser(ctx context.Context, userID int) error
+	Refresh(ctx context.Context, sid string, payload *IAMSessionPayload, ttl time.Duration) error
 }
 
 type iamSessionCache struct {
@@ -53,7 +56,7 @@ func (c *iamSessionCache) Get(ctx context.Context, sid string) (*IAMSessionPaylo
 }
 
 func (c *iamSessionCache) Set(ctx context.Context, sid string, payload IAMSessionPayload, ttl time.Duration) error {
-
+	payload.ExpiredAt = utils.Now().Add(ttl).Unix()
 	if err := c.rdb.SetJSON(ctx, c.key(sid), payload, ttl); err != nil {
 		return err
 	}
@@ -92,4 +95,15 @@ func (c *iamSessionCache) DelAllByUser(ctx context.Context, userID int) error {
 	}
 
 	return c.rdb.Del(ctx, userSidsKey)
+}
+
+func (c *iamSessionCache) Refresh(ctx context.Context, sid string, payload *IAMSessionPayload, ttl time.Duration) error {
+	payload.ExpiredAt = utils.Now().Add(ttl).Unix()
+
+	if err := c.rdb.SetJSON(ctx, c.key(sid), payload, ttl); err != nil {
+		return err
+	}
+
+	userSidsKey := c.userSidsKey(payload.UserID)
+	return c.rdb.Expire(ctx, userSidsKey, ttl)
 }

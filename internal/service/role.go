@@ -17,7 +17,7 @@ type RoleService struct {
 }
 
 func NewRoleService(repo repository.RoleRepository, userRoleRepo repository.UserRoleRepository) *RoleService {
-	return &RoleService{repo, userRoleRepo}
+	return &RoleService{repo: repo, userRoleRepo: userRoleRepo}
 }
 
 func (s *RoleService) List(ctx context.Context, params req.RoleList) ([]resp.RoleListItem, int, error) {

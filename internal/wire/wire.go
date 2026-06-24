@@ -4,6 +4,7 @@
 package wire
 
 import (
+	"github.com/erewhile/iam/internal/cache/rds"
 	"github.com/erewhile/iam/internal/ent/db"
 	"github.com/erewhile/iam/internal/handler"
 	"github.com/erewhile/iam/internal/repository"
@@ -12,11 +13,13 @@ import (
 )
 
 type App struct {
-	Cert     *handler.CertHandler
-	User     *handler.UserHandler
-	Role     *handler.RoleHandler
-	UserRole *handler.UserRoleHandler
-	Token    *handler.TokenHandler
+	Cert        *handler.CertHandler
+	User        *handler.UserHandler
+	Role        *handler.RoleHandler
+	UserRole    *handler.UserRoleHandler
+	Token       *handler.TokenHandler
+	OAuth       *handler.OAuthHandler
+	Application *handler.ApplicationHandler
 }
 
 var RepositorySet = wire.NewSet(
@@ -25,6 +28,7 @@ var RepositorySet = wire.NewSet(
 	repository.NewTransactor,
 	repository.NewUserRoleRepository,
 	repository.NewRoleRepository,
+	repository.NewApplicationRepository,
 )
 
 var ServiceSet = wire.NewSet(
@@ -32,6 +36,10 @@ var ServiceSet = wire.NewSet(
 	service.NewUserRoleService,
 	service.NewRoleService,
 	service.NewTokenService,
+	service.NewApplicationService,
+	rds.NewTokenCache,
+	service.NewOAuthService,
+	rds.NewIAMSessionCache,
 )
 
 var HandlerSet = wire.NewSet(
@@ -40,6 +48,8 @@ var HandlerSet = wire.NewSet(
 	handler.NewRoleHandler,
 	handler.NewUserRoleHandler,
 	handler.NewTokenHandler,
+	handler.NewOAuthHandler,
+	handler.NewApplicationHandler,
 )
 
 var providerSet = wire.NewSet(

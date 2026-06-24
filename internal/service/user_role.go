@@ -22,7 +22,11 @@ func NewUserRoleService(
 	roleRepo repository.RoleRepository,
 	userRepo repository.UserRepository,
 ) *UserRoleService {
-	return &UserRoleService{repo, roleRepo, userRepo}
+	return &UserRoleService{
+		repo:     repo,
+		roleRepo: roleRepo,
+		userRepo: userRepo,
+	}
 }
 
 func (s *UserRoleService) Roles(ctx context.Context, params req.UserRoleRoles) ([]resp.RoleListItem, error) {

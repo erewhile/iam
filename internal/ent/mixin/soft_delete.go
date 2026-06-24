@@ -14,6 +14,9 @@ func (SoftDeleteMixin) Fields() []ent.Field {
 	return []ent.Field{
 		field.Time("deleted_at").
 			Optional().
-			Nillable(),
+			Nillable().
+			SchemaType(map[string]string{
+				"mysql": "datetime(3)",
+			}),
 	}
 }

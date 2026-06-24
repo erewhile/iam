@@ -11,16 +11,16 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-type RoleHandler struct {
-	srv *service.RoleService
+type ApplicationHandler struct {
+	srv *service.ApplicationService
 }
 
-func NewRoleHandler(srv *service.RoleService) *RoleHandler {
-	return &RoleHandler{srv: srv}
+func NewApplicationHandler(srv *service.ApplicationService) *ApplicationHandler {
+	return &ApplicationHandler{srv: srv}
 }
 
-func (h *RoleHandler) List(c *gin.Context) {
-	var params req.RoleList
+func (h *ApplicationHandler) List(c *gin.Context) {
+	var params req.ApplicationList
 	if err := c.ShouldBindQuery(&params); err != nil {
 		response.Fail(c.Writer, code.Parameter)
 		return
@@ -39,7 +39,7 @@ func (h *RoleHandler) List(c *gin.Context) {
 	})
 }
 
-func (h *RoleHandler) Info(c *gin.Context) {
+func (h *ApplicationHandler) Info(c *gin.Context) {
 	var params req.InfoPathParams
 	if err := c.ShouldBindUri(&params); err != nil {
 		response.Fail(c.Writer, code.Parameter)
@@ -56,8 +56,8 @@ func (h *RoleHandler) Info(c *gin.Context) {
 	response.OkData(c.Writer, info)
 }
 
-func (h *RoleHandler) Create(c *gin.Context) {
-	var body req.RoleCreate
+func (h *ApplicationHandler) Create(c *gin.Context) {
+	var body req.ApplicationCreate
 	if err := c.ShouldBindJSON(&body); err != nil {
 		response.Fail(c.Writer, code.Parameter)
 		return
@@ -72,14 +72,14 @@ func (h *RoleHandler) Create(c *gin.Context) {
 	response.OK(c.Writer)
 }
 
-func (h *RoleHandler) Update(c *gin.Context) {
-	var params req.RoleUpdatePathParams
+func (h *ApplicationHandler) Update(c *gin.Context) {
+	var params req.ApplicationUpdatePathParams
 	if err := c.ShouldBindUri(&params); err != nil {
 		response.Fail(c.Writer, code.Parameter)
 		return
 	}
 
-	var body req.RoleUpdate
+	var body req.ApplicationUpdate
 	if err := c.ShouldBindJSON(&body); err != nil {
 		response.Fail(c.Writer, code.Parameter)
 		return
@@ -94,7 +94,7 @@ func (h *RoleHandler) Update(c *gin.Context) {
 	response.OK(c.Writer)
 }
 
-func (h *RoleHandler) Delete(c *gin.Context) {
+func (h *ApplicationHandler) Delete(c *gin.Context) {
 	var params req.DeletePathParams
 	if err := c.ShouldBindUri(&params); err != nil {
 		response.Fail(c.Writer, code.Parameter)

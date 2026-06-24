@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/erewhile/iam/internal/cache/redis"
+	"github.com/erewhile/iam/internal/cache/rds"
 	"github.com/erewhile/iam/internal/dto/req"
 	"github.com/erewhile/iam/internal/dto/resp"
 	"github.com/erewhile/iam/internal/ent/db"
@@ -13,11 +13,12 @@ import (
 )
 
 type TokenService struct {
-	repo repository.TokenRepository
+	repo       repository.TokenRepository
+	tokenCache rds.TokenCache
 }
 
-func NewTokenService(repo repository.TokenRepository) *TokenService {
-	return &TokenService{repo}
+func NewTokenService(repo repository.TokenRepository, tokenCache rds.TokenCache) *TokenService {
+	return &TokenService{repo: repo, tokenCache: tokenCache}
 }
 
 func (s *TokenService) List(ctx context.Context, params req.TokenList) ([]resp.TokenListItem, int, error) {
@@ -62,9 +63,8 @@ func (s *TokenService) Revoke(ctx context.Context, params req.TokenRevokePathPar
 		return errors.New("failed to get token info")
 	}
 
-	tokenCache := redis.NewTokenCache()
-	_ = tokenCache.DelAccess(ctx, tokenInfo.SessionID)
-	_ = tokenCache.DelRefresh(ctx, tokenInfo.SessionID)
+	_ = s.tokenCache.DelAccess(ctx, tokenInfo.SessionID)
+	_ = s.tokenCache.DelRefresh(ctx, tokenInfo.SessionID)
 
 	if err := s.repo.RevokeBySession(ctx, tokenInfo.SessionID); err != nil {
 		logger.Error("failed to revoke token", err.Error())

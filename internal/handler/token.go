@@ -16,7 +16,7 @@ type TokenHandler struct {
 }
 
 func NewTokenHandler(srv *service.TokenService) *TokenHandler {
-	return &TokenHandler{srv}
+	return &TokenHandler{srv: srv}
 }
 
 func (h *TokenHandler) List(c *gin.Context) {

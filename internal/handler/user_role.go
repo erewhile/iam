@@ -12,7 +12,7 @@ type UserRoleHandler struct {
 }
 
 func NewUserRoleHandler(srv *service.UserRoleService) *UserRoleHandler {
-	return &UserRoleHandler{srv}
+	return &UserRoleHandler{srv: srv}
 }
 
 func (h *UserRoleHandler) Roles(c *gin.Context) {

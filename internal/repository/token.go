@@ -7,6 +7,7 @@ import (
 	"github.com/erewhile/iam/internal/dto/resp"
 	"github.com/erewhile/iam/internal/ent/db"
 	"github.com/erewhile/iam/internal/ent/db/token"
+	"github.com/erewhile/iam/internal/model"
 	"github.com/erewhile/iam/pkg/utils"
 	"github.com/google/uuid"
 )
@@ -15,9 +16,12 @@ type TokenRepository interface {
 	List(ctx context.Context, params req.TokenList) ([]resp.TokenListItem, int, error)
 	Create(ctx context.Context, params req.TokenCreate) error
 	GetByID(ctx context.Context, id int) (*db.Token, error)
+	GetIfValid(ctx context.Context, hashed []byte, tokenType model.TokenType) (*db.Token, error)
 	RevokeByID(ctx context.Context, id int) error
 	RevokeBySession(ctx context.Context, sessionID uuid.UUID) error
 	RevokeByJTI(ctx context.Context, jti uuid.UUID) error
+	RevokeAllByUser(ctx context.Context, userID int) error
+	ListActiveSessionsByUser(ctx context.Context, userID int) ([]uuid.UUID, error)
 }
 
 type tokenRepository struct {
@@ -112,6 +116,21 @@ func (r *tokenRepository) GetByID(ctx context.Context, id int) (*db.Token, error
 	return t, nil
 }
 
+func (r *tokenRepository) GetIfValid(ctx context.Context, hashed []byte, tokenType model.TokenType) (*db.Token, error) {
+	t, err := r.client.Token.Query().
+		Where(
+			token.TokenHashEQ(hashed),
+			token.TypeEQ(tokenType),
+			token.ExpiresAtGT(utils.Now()),
+			token.RevokedAtIsNil(),
+		).
+		Only(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return t, nil
+}
+
 func (r *tokenRepository) RevokeByID(ctx context.Context, id int) error {
 	_, err := r.client.Token.UpdateOneID(id).
 		Where(token.RevokedAtIsNil(), token.ExpiresAtGT(utils.Now())).
@@ -143,4 +162,32 @@ func (r *tokenRepository) RevokeByJTI(ctx context.Context, jti uuid.UUID) error 
 		return err
 	}
 	return nil
+}
+
+func (r *tokenRepository) RevokeAllByUser(ctx context.Context, userID int) error {
+	_, err := r.client.Token.Update().
+		Where(
+			token.UserIDEQ(userID),
+			token.RevokedAtIsNil(),
+			token.ExpiresAtGT(utils.Now()),
+		).
+		SetRevokedAt(utils.Now()).
+		Save(ctx)
+	return err
+}
+
+func (r *tokenRepository) ListActiveSessionsByUser(ctx context.Context, userID int) ([]uuid.UUID, error) {
+	var sessionIDs []uuid.UUID
+	err := r.client.Token.Query().
+		Where(
+			token.UserIDEQ(userID),
+			token.RevokedAtIsNil(),
+			token.ExpiresAtGT(utils.Now()),
+		).
+		Select(token.FieldSessionID).
+		Scan(ctx, &sessionIDs)
+	if err != nil {
+		return nil, err
+	}
+	return sessionIDs, nil
 }

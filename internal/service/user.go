@@ -3,9 +3,10 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/erewhile/iam/config"
-	"github.com/erewhile/iam/internal/cache/redis"
+	"github.com/erewhile/iam/internal/cache/rds"
 	"github.com/erewhile/iam/internal/dto/req"
 	"github.com/erewhile/iam/internal/dto/resp"
 	"github.com/erewhile/iam/internal/ent/db"
@@ -20,56 +21,76 @@ import (
 )
 
 type UserService struct {
-	repo       repository.UserRepository
-	token      repository.TokenRepository
-	transactor *repository.Transactor
+	repo         repository.UserRepository
+	token        repository.TokenRepository
+	transactor   *repository.Transactor
+	tokenCache   rds.TokenCache
+	sessionCache rds.IAMSessionCache
 }
 
 func NewUserService(
 	repo repository.UserRepository,
 	token repository.TokenRepository,
 	transactor *repository.Transactor,
+	tokenCache rds.TokenCache,
+	sessionCache rds.IAMSessionCache,
 ) *UserService {
 	return &UserService{
-		repo:       repo,
-		token:      token,
-		transactor: transactor,
+		repo:         repo,
+		token:        token,
+		transactor:   transactor,
+		tokenCache:   tokenCache,
+		sessionCache: sessionCache,
 	}
 }
 
-func (s *UserService) Login(ctx context.Context, param req.UserLogin) (*token.TokenPair, error) {
-	userInfo, err := s.repo.GetByUsername(ctx, param.Username)
+func (s *UserService) Login(ctx context.Context, body req.UserLogin) (*token.TokenPair, string, error) {
+	userInfo, err := s.repo.GetByUsername(ctx, body.Username)
 	if err != nil {
 		if db.IsNotFound(err) {
-			return nil, errors.New("user not found")
+			return nil, "", errors.New("user not found")
 		}
 		logger.Error("login failed", err)
-		return nil, errors.New("login failed")
+		return nil, "", errors.New("login failed")
 	}
 
 	if userInfo.Status != model.UserStatusActive {
-		return nil, errors.New("account is disabled")
+		return nil, "", errors.New("account is not active")
 	}
 
-	ok, err := password.Validate(param.Password, string(userInfo.PasswordHash))
+	ok, err := password.Validate(body.Password, string(userInfo.PasswordHash))
 	if err != nil {
 		logger.Error("password check failed", err)
-		return nil, errors.New("password check failed, please try again later")
+		return nil, "", errors.New("password check failed, please try again later")
 	}
-
 	if !ok {
-		return nil, errors.New("wrong password")
+		return nil, "", errors.New("wrong password")
 	}
 
 	sessionID := uuid.New()
-	return s.issueTokenPair(ctx, userInfo.ID, userInfo.UUID, sessionID, param.RequestMeta)
+	tokenPair, err := s.issueTokenPair(ctx, userInfo.ID, userInfo.UUID, sessionID, body.RequestMeta)
+	if err != nil {
+		return nil, "", err
+	}
+
+	sid, err := s.StartSession(ctx, userInfo.ID, userInfo.UUID)
+	if err != nil {
+		logger.Error("start iam session failed", err)
+		return nil, "", errors.New("login failed")
+	}
+
+	return tokenPair, sid, nil
+}
+
+func (s *UserService) LoginWithOAuthCode(ctx context.Context, payload *rds.OAuthCodePayload, meta req.RequestMeta) (*token.TokenPair, error) {
+	return s.issueTokenPair(ctx, payload.UserID, payload.UserUUID, payload.SessionID, meta)
 }
 
 func (s *UserService) Profile(ctx context.Context, userID int) {}
 
-func (s *UserService) Refresh(ctx context.Context, param req.UserRefresh) (*token.TokenPair, error) {
+func (s *UserService) Refresh(ctx context.Context, params req.UserRefresh) (*token.TokenPair, error) {
 	claims, payload, err := token.Validate(
-		param.Token,
+		params.Token,
 		[]byte(config.Get().Token.Aad),
 		token.TokenTypeRefresh,
 	)
@@ -77,32 +98,55 @@ func (s *UserService) Refresh(ctx context.Context, param req.UserRefresh) (*toke
 		return nil, errors.New("invalid token")
 	}
 
-	tokenCache := redis.NewTokenCache()
-	online, err := tokenCache.ExistsRefresh(ctx, claims.SessionID)
+	online, err := s.tokenCache.ExistsRefresh(ctx, claims.SessionID)
 	if err != nil || !online {
 		return nil, errors.New("refresh token expired")
 	}
 
-	_ = tokenCache.DelAccess(ctx, claims.SessionID)
-	_ = tokenCache.DelRefresh(ctx, claims.SessionID)
+	tokenHashed := hash.HashBlake2b256([]byte(params.Token))
+	if !s.isTokenValid(ctx, tokenHashed, model.TokenTypeRefresh) {
+		s.invalidateToken(ctx, claims.SessionID)
+		return nil, errors.New("refresh token revoked or not found")
+	}
+
+	userInfo, err := s.repo.GetByID(ctx, payload.UserID)
+	if err != nil {
+		if db.IsNotFound(err) {
+			s.invalidateToken(ctx, claims.SessionID)
+			return nil, errors.New("user not found")
+		}
+		logger.Error("refresh failed", err)
+		return nil, errors.New("refresh failed")
+	}
+
+	if userInfo.Status != model.UserStatusActive {
+		s.invalidateToken(ctx, claims.SessionID)
+		return nil, errors.New("account is not active")
+	}
 
 	if err := s.token.RevokeBySession(ctx, claims.SessionID); err != nil {
 		logger.Error("revoke failed", err)
 		return nil, errors.New("revoke failed")
 	}
 
+	s.invalidateToken(ctx, claims.SessionID)
+
 	newSessionID := uuid.New()
-	return s.issueTokenPair(ctx, payload.UserID, payload.UserUUID, newSessionID, param.RequestMeta)
+	return s.issueTokenPair(ctx, payload.UserID, payload.UserUUID, newSessionID, params.RequestMeta)
 }
 
-func (s *UserService) Logout(ctx context.Context, sessionID uuid.UUID) error {
-	tokenCache := redis.NewTokenCache()
-	_ = tokenCache.DelAccess(ctx, sessionID)
-	_ = tokenCache.DelRefresh(ctx, sessionID)
+func (s *UserService) Logout(ctx context.Context, sessionID uuid.UUID, iamSID string) error {
+	s.invalidateToken(ctx, sessionID)
 
 	if err := s.token.RevokeBySession(ctx, sessionID); err != nil {
 		logger.Error("logout failed", err)
 		return errors.New("logout failed")
+	}
+
+	if iamSID != "" {
+		if err := s.ClearSession(ctx, iamSID); err != nil {
+			logger.Error("clear iam session failed", err)
+		}
 	}
 	return nil
 }
@@ -162,11 +206,72 @@ func (s *UserService) issueTokenPair(
 		return nil, errors.New("save token failed")
 	}
 
-	tokenCache := redis.NewTokenCache()
-	_ = tokenCache.SetAccess(ctx, sessionID, config.Get().Token.AccessTokenTTL)
-	_ = tokenCache.SetRefresh(ctx, sessionID, config.Get().Token.RefreshTokenTTL)
+	_ = s.tokenCache.SetAccess(ctx, sessionID, config.Get().Token.AccessTokenTTL)
+	_ = s.tokenCache.SetRefresh(ctx, sessionID, config.Get().Token.RefreshTokenTTL)
 
 	return tokenPair, nil
+}
+
+func (s *UserService) isTokenValid(ctx context.Context, hashed []byte, tt model.TokenType) bool {
+	_, err := s.token.GetIfValid(ctx, hashed, tt)
+	return err == nil
+}
+
+func (s *UserService) invalidateToken(ctx context.Context, sessionID uuid.UUID) {
+	if err := s.tokenCache.DelAccess(ctx, sessionID); err != nil {
+		logger.Error("del access cache failed", err)
+	}
+	if err := s.tokenCache.DelRefresh(ctx, sessionID); err != nil {
+		logger.Error("del refresh cache failed", err)
+	}
+}
+
+func (s *UserService) StartSession(ctx context.Context, userID int, userUUID uuid.UUID) (string, error) {
+	sid, err := utils.GenerateRandomString(32)
+	if err != nil {
+		return "", err
+	}
+	if err := s.sessionCache.Set(ctx, sid, rds.IAMSessionPayload{
+		UserID:   userID,
+		UserUUID: userUUID,
+	}, config.Get().Session.CookieTTL); err != nil {
+		return "", err
+	}
+	return sid, nil
+}
+
+func (s *UserService) CheckSession(ctx context.Context, sid string) (userID int, userUUID uuid.UUID, ok bool) {
+	if sid == "" {
+		return 0, uuid.Nil, false
+	}
+	payload, err := s.sessionCache.Get(ctx, sid)
+	if err != nil || payload == nil {
+		return 0, uuid.Nil, false
+	}
+
+	totalTTL := config.Get().Session.CookieTTL
+	now := utils.Now().Unix()
+	remainingTime := payload.ExpiredAt - now
+	halfTTL := int64(totalTTL.Seconds() / 2)
+
+	if remainingTime < halfTTL {
+		asyncCtx := context.Background()
+
+		go func(p rds.IAMSessionPayload) {
+			if err := s.sessionCache.Refresh(asyncCtx, sid, &p, totalTTL); err != nil {
+				logger.Error(fmt.Sprintf("async refresh session failed for sid: %s", sid), err)
+			}
+		}(*payload)
+	}
+
+	return payload.UserID, payload.UserUUID, true
+}
+
+func (s *UserService) ClearSession(ctx context.Context, sid string) error {
+	if sid == "" {
+		return nil
+	}
+	return s.sessionCache.Del(ctx, sid)
 }
 
 func (s *UserService) List(ctx context.Context, params req.UserList) ([]resp.UserListItem, int, error) {
@@ -275,11 +380,15 @@ func (s *UserService) Update(ctx context.Context, params req.UserUpdatePathParam
 		return errors.New("failed to update user")
 	}
 
+	if body.Status == model.UserStatusDisabled {
+		_ = s.InvalidateAllSessions(ctx, params.UserID)
+	}
+
 	return nil
 }
 
-func (s *UserService) Delete(ctx context.Context, pathParams req.DeletePathParams) error {
-	_, err := s.repo.GetByID(ctx, pathParams.ID)
+func (s *UserService) Delete(ctx context.Context, params req.DeletePathParams) error {
+	_, err := s.repo.GetByID(ctx, params.ID)
 	if err != nil {
 		if db.IsNotFound(err) {
 			return errors.New("user not found")
@@ -289,9 +398,29 @@ func (s *UserService) Delete(ctx context.Context, pathParams req.DeletePathParam
 		return errors.New("failed to get user info")
 	}
 
-	if err := s.repo.Delete(ctx, pathParams); err != nil {
+	if err := s.repo.Delete(ctx, params); err != nil {
 		logger.Error("failed to delete user", err)
 		return errors.New("failed to delete user")
 	}
+	return nil
+}
+
+func (s *UserService) InvalidateAllSessions(ctx context.Context, userID int) error {
+	if err := s.token.RevokeAllByUser(ctx, userID); err != nil {
+		return fmt.Errorf("revoke tokens failed: %w", err)
+	}
+
+	sessionIDs, err := s.token.ListActiveSessionsByUser(ctx, userID)
+	if err != nil {
+		logger.Error("list active sessions failed", err)
+	}
+	for _, sid := range sessionIDs {
+		s.invalidateToken(ctx, sid)
+	}
+
+	if err := s.sessionCache.DelAllByUser(ctx, userID); err != nil {
+		logger.Error("clear iam sessions failed", err)
+	}
+
 	return nil
 }

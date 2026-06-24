@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/erewhile/iam/cmd/flags"
+	"github.com/erewhile/iam/internal/consts"
 	"github.com/erewhile/iam/pkg/utils"
 )
 
@@ -124,6 +125,14 @@ func Get() *Config {
 func defaultConfig() *Config {
 	logsDir := filepath.Join(flags.Data, "logs")
 
+	mustGenKey := func() string {
+		if s, err := utils.RandomCryptoToken(32); err == nil {
+			return s
+		}
+
+		return "NSyUvnZzUJHLjPBKPhVkgRJwatMvBD+3"
+	}
+
 	return &Config{
 		Scheme: Scheme{
 			Port: ":26621",
@@ -140,8 +149,8 @@ func defaultConfig() *Config {
 			MaxLifetime:  time.Hour,
 		},
 		Token: Token{
-			Kid:                   "erewhile-iam-public-key",
-			Aad:                   "30bAOV+0Upo+D3T7c9DPl/hah5ChhXy0",
+			Kid:                   "iam-key-" + consts.APIVersion,
+			Aad:                   mustGenKey(),
 			AccessTokenTTL:        5 * time.Minute,
 			AccessTokenCookieKey:  "atck",
 			RefreshTokenTTL:       24 * time.Hour,
@@ -149,10 +158,10 @@ func defaultConfig() *Config {
 		},
 		Session: Session{
 			CookieKey: "iam_sid",
-			CookieTTL: 12 * time.Hour,
+			CookieTTL: 8 * time.Hour,
 		},
 		Aes: Aes{
-			Key: "co1FsGScYJirTXZ+ymVm/mbZ+4Lhrep2",
+			Key: mustGenKey(),
 		},
 		Redis: Redis{
 			Addr:         "127.0.0.1:6379",
@@ -178,7 +187,7 @@ func defaultConfig() *Config {
 			AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 			AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization"},
 			AllowCredentials: true,
-			MaxAge:           12 * time.Hour,
+			MaxAge:           8 * time.Hour,
 		},
 	}
 }

@@ -69,7 +69,7 @@ func (h *OAuthHandler) Authorize(c *gin.Context) {
 		c.Redirect(http.StatusFound, loginURL)
 		return
 	}
-	authCode, err := utils.GenerateRandomString(32)
+	authCode, err := utils.RandomString(32)
 	if err != nil {
 		logger.Error("failed to generate oauth code", err)
 		response.InternalServer(c.Writer)

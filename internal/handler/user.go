@@ -99,9 +99,24 @@ func (h *UserHandler) Login(c *gin.Context) {
 	}
 
 	cookieUtil := utils.NewCookieUtil(!flags.Debug)
-	cookieUtil.Set(c.Writer, config.Get().Token.AccessTokenCookieKey, tokenPair.AccessToken, int(config.Get().Token.AccessTokenTTL.Seconds()))
-	cookieUtil.Set(c.Writer, config.Get().Token.RefreshTokenCookieKey, tokenPair.RefreshToken, int(config.Get().Token.RefreshTokenTTL.Seconds()))
-	cookieUtil.Set(c.Writer, config.Get().Session.CookieKey, sid, int(config.Get().Session.CookieTTL.Seconds()))
+	cookieUtil.Set(
+		c.Writer,
+		config.Get().Token.AccessTokenCookieKey,
+		tokenPair.AccessToken,
+		int(config.Get().Token.AccessTokenTTL.Seconds()),
+	)
+	cookieUtil.Set(
+		c.Writer,
+		config.Get().Token.RefreshTokenCookieKey,
+		tokenPair.RefreshToken,
+		int(config.Get().Token.RefreshTokenTTL.Seconds()),
+	)
+	cookieUtil.Set(
+		c.Writer,
+		config.Get().Session.CookieKey,
+		sid,
+		int(config.Get().Session.CookieTTL.Seconds()),
+	)
 
 	response.OK(c.Writer)
 }
@@ -190,6 +205,7 @@ func (h *UserHandler) Logout(c *gin.Context) {
 
 	cookieUtil.Delete(c.Writer, config.Get().Token.AccessTokenCookieKey)
 	cookieUtil.Delete(c.Writer, config.Get().Token.RefreshTokenCookieKey)
+	cookieUtil.Delete(c.Writer, config.Get().Session.CookieKey)
 
 	response.OK(c.Writer)
 }

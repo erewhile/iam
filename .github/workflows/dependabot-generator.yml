@@ -28,15 +28,14 @@ jobs:
           go install entgo.io/ent/cmd/ent@latest
           go install github.com/google/wire/cmd/wire@latest
 
-      - name: Update Go Dependencies
-        run: |
-          go get -u ./...
-          go mod tidy
-
-      - name: Generate Code (Ent & Wire)
+      - name: Generate Code (Ent Then Wire)
         run: |
           go generate ./internal/ent/...
           $(go env GOPATH)/bin/wire ./internal/wire/...
+
+      - name: Update Go Dependencies
+        run: |
+          go get -u ./...
           go mod tidy
 
       - name: Create Pull Request

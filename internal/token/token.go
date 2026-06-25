@@ -12,7 +12,9 @@ import (
 	"time"
 
 	"github.com/erewhile/iam/config"
+	"github.com/erewhile/iam/internal/dto/req"
 	"github.com/erewhile/iam/pkg/aes"
+	"github.com/erewhile/iam/pkg/hash"
 	"github.com/erewhile/iam/pkg/utils"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
@@ -41,6 +43,7 @@ type Claims struct {
 	SessionID     uuid.UUID `json:"session_id"`
 	TokenType     TokenType `json:"token_type"`
 	EncryptedData string    `json:"encrypted_data"`
+	Device        string    `json:"device"`
 	jwt.RegisteredClaims
 }
 
@@ -91,6 +94,7 @@ func init() {
 
 func Validate(
 	tokenString string,
+	meta req.RequestMeta,
 	aad []byte,
 	expectedType TokenType,
 ) (*Claims, *UserPayload, error) {
@@ -124,6 +128,12 @@ func Validate(
 		return nil, nil, fmt.Errorf("invalid token type: %s", claims.TokenType)
 	}
 
+	currentDeviceData := []byte(meta.IP + meta.UserAgent)
+	hmacKey := []byte(config.Get().Hash.HMACKey)
+	if !hash.VerifyHMACBlake2b256Base64(currentDeviceData, hmacKey, claims.Device) {
+		return nil, nil, errors.New("invalid device")
+	}
+
 	decryptedBytes, err := base64.StdEncoding.DecodeString(claims.EncryptedData)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to base64 decode ciphertext: %w", err)
@@ -145,6 +155,7 @@ func Validate(
 func Generate(
 	userPayload UserPayload,
 	sessionID uuid.UUID,
+	meta req.RequestMeta,
 	aad []byte,
 ) (*TokenPair, error) {
 	if sessionID == uuid.Nil {
@@ -157,6 +168,10 @@ func Generate(
 
 	now := utils.Now()
 
+	currentDeviceData := []byte(meta.IP + meta.UserAgent)
+	hmacKey := []byte(config.Get().Hash.HMACKey)
+	deviceStr := hash.HMACBlake2b256Base64(currentDeviceData, hmacKey)
+
 	accessJTI, _ := uuid.NewRandom()
 	refreshJTI, _ := uuid.NewRandom()
 
@@ -168,6 +183,7 @@ func Generate(
 		TokenTypeAccess,
 		accessJTI,
 		now.Add(config.Get().Token.AccessTokenTTL),
+		deviceStr,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate access token: %w", err)
@@ -181,6 +197,7 @@ func Generate(
 		TokenTypeRefresh,
 		refreshJTI,
 		now.Add(config.Get().Token.RefreshTokenTTL),
+		deviceStr,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate refresh token: %w", err)
@@ -202,6 +219,7 @@ func generate(
 	tokenType TokenType,
 	jti uuid.UUID,
 	exp time.Time,
+	device string,
 ) (string, error) {
 
 	payload := UserPayload{
@@ -225,6 +243,7 @@ func generate(
 		SessionID:     sessionID,
 		TokenType:     tokenType,
 		EncryptedData: encodedCiphertext,
+		Device:        device,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ID:        jti.String(),
 			ExpiresAt: jwt.NewNumericDate(exp),

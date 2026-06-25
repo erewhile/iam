@@ -108,6 +108,10 @@ type LoginSecurity struct {
 	MaxAttemptsByIP int           `mapstructure:"max_attempts_by_ip"`
 }
 
+type Hash struct {
+	HMACKey string `json:"hmac_key"`
+}
+
 type Config struct {
 	Scheme        Scheme        `json:"scheme"`
 	Database      Database      `json:"database"`
@@ -118,6 +122,7 @@ type Config struct {
 	Logger        Logger        `json:"logger"`
 	CORS          CORS          `json:"cors"`
 	LoginSecurity LoginSecurity `json:"login_security"`
+	Hash          Hash          `json:"hash"`
 }
 
 var (
@@ -202,6 +207,9 @@ func defaultConfig() *Config {
 			AttemptWindow:   10 * time.Minute,
 			LockoutDuration: 15 * time.Minute,
 			MaxAttemptsByIP: 20,
+		},
+		Hash: Hash{
+			HMACKey: mustGenKey(),
 		},
 	}
 }

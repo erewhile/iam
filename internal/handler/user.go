@@ -120,13 +120,13 @@ func (h *UserHandler) Refresh(c *gin.Context) {
 		return
 	}
 
-	param := req.UserRefresh{
+	body := req.UserRefresh{
 		Token:       refreshToken,
 		RequestMeta: req.GetRequestMeta(c.Request),
 	}
 
 	ctx := c.Request.Context()
-	tokenPair, err := h.srv.Refresh(ctx, param)
+	tokenPair, err := h.srv.Refresh(ctx, body)
 	if err != nil {
 		response.BadRequest(c.Writer, err.Error())
 		return

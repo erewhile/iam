@@ -159,9 +159,10 @@ func (s *UserService) LoginWithOAuthCode(ctx context.Context, payload *rds.OAuth
 
 func (s *UserService) Profile(ctx context.Context, userID int) {}
 
-func (s *UserService) Refresh(ctx context.Context, params req.UserRefresh) (*token.TokenPair, error) {
+func (s *UserService) Refresh(ctx context.Context, body req.UserRefresh) (*token.TokenPair, error) {
 	claims, payload, err := token.Validate(
-		params.Token,
+		body.Token,
+		body.RequestMeta,
 		[]byte(config.Get().Token.Aad),
 		token.TokenTypeRefresh,
 	)
@@ -174,7 +175,7 @@ func (s *UserService) Refresh(ctx context.Context, params req.UserRefresh) (*tok
 		return nil, errors.New("refresh token expired")
 	}
 
-	tokenHashed := hash.HashBlake2b256([]byte(params.Token))
+	tokenHashed := hash.HashBlake2b256([]byte(body.Token))
 	if !s.isTokenValid(ctx, tokenHashed, model.TokenTypeRefresh) {
 		s.invalidateToken(ctx, claims.SessionID)
 		return nil, errors.New("refresh token revoked or not found")
@@ -215,7 +216,7 @@ func (s *UserService) Refresh(ctx context.Context, params req.UserRefresh) (*tok
 		ApplicationID: payload.ApplicationID,
 		Roles:         roleCodes,
 	}
-	return s.issueTokenPair(ctx, userPayload, newSessionID, params.RequestMeta)
+	return s.issueTokenPair(ctx, userPayload, newSessionID, body.RequestMeta)
 }
 
 func (s *UserService) Logout(ctx context.Context, sessionID uuid.UUID, iamSID string) error {
@@ -243,6 +244,7 @@ func (s *UserService) issueTokenPair(
 	tokenPair, err := token.Generate(
 		userPayload,
 		sessionID,
+		meta,
 		[]byte(config.Get().Token.Aad),
 	)
 	if err != nil {

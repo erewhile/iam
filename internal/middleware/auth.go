@@ -7,6 +7,7 @@ import (
 	"github.com/erewhile/iam/config"
 	"github.com/erewhile/iam/internal/cache/rds"
 	"github.com/erewhile/iam/internal/consts"
+	"github.com/erewhile/iam/internal/dto/req"
 	"github.com/erewhile/iam/internal/token"
 	"github.com/erewhile/iam/pkg/response"
 	"github.com/erewhile/iam/pkg/utils"
@@ -25,7 +26,7 @@ func Auth() gin.HandlerFunc {
 			return
 		}
 
-		claims, payload, err := token.Validate(accessToken, []byte(config.Get().Token.Aad), token.TokenTypeAccess)
+		claims, payload, err := token.Validate(accessToken, req.GetRequestMeta(c.Request), []byte(config.Get().Token.Aad), token.TokenTypeAccess)
 		if err != nil {
 			response.Custom(c.Writer, http.StatusUnauthorized, "invalid token")
 			c.Abort()

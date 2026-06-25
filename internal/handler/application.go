@@ -94,6 +94,23 @@ func (h *ApplicationHandler) Update(c *gin.Context) {
 	response.OkData(c.Writer, res)
 }
 
+func (h *ApplicationHandler) UpdateSecret(c *gin.Context) {
+	var params req.ApplicationUpdatePathParams
+	if err := c.ShouldBindUri(&params); err != nil {
+		response.Fail(c.Writer, code.Parameter)
+		return
+	}
+
+	ctx := c.Request.Context()
+	res, err := h.srv.UpdateSecret(ctx, params)
+	if err != nil {
+		response.BadRequest(c.Writer, err.Error())
+		return
+	}
+
+	response.OkData(c.Writer, res)
+}
+
 func (h *ApplicationHandler) Delete(c *gin.Context) {
 	var params req.DeletePathParams
 	if err := c.ShouldBindUri(&params); err != nil {

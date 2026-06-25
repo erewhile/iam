@@ -75,6 +75,7 @@ func Init(e *gin.Engine) {
 		adminApps.GET("/:id", app.Application.Info)
 		adminApps.POST("", app.Application.Create)
 		adminApps.PUT("/:id", app.Application.Update)
+		adminApps.PUT("/:id/secret", app.Application.UpdateSecret)
 		adminApps.DELETE("/:id", app.Application.Delete)
 	}
 

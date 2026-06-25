@@ -111,6 +111,17 @@ func (h *OAuthHandler) ExchangeToken(c *gin.Context) {
 
 	ctx := c.Request.Context()
 
+	payload, err := h.cache.GetAndDelCode(ctx, params.Code)
+	if err != nil {
+		response.BadRequest(c.Writer, "invalid or expired code")
+		return
+	}
+
+	if payload.ClientID != params.ClientID {
+		response.BadRequest(c.Writer, "client mismatch")
+		return
+	}
+
 	app, err := h.oauthService.ValidateClient(ctx, params.ClientID, params.ClientSecret)
 	if err != nil {
 		switch {
@@ -120,17 +131,6 @@ func (h *OAuthHandler) ExchangeToken(c *gin.Context) {
 			logger.Error("validate client failed", err)
 			response.InternalServer(c.Writer)
 		}
-		return
-	}
-
-	payload, err := h.cache.GetAndDelCode(ctx, params.Code)
-	if err != nil {
-		response.BadRequest(c.Writer, "invalid or expired code")
-		return
-	}
-
-	if payload.ClientID != params.ClientID {
-		response.BadRequest(c.Writer, "client mismatch")
 		return
 	}
 

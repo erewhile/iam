@@ -17,7 +17,7 @@ type ApplicationRepository interface {
 	GetByClientID(ctx context.Context, clientID string) (*db.Application, error)
 	Duplicate(ctx context.Context, name, clientID string, id ...int) (bool, error)
 	Create(ctx context.Context, body req.ApplicationCreate, clientSecret string) (*db.Application, error)
-	Update(ctx context.Context, params req.ApplicationUpdatePathParams, body req.ApplicationUpdate, clientSecret string) (*db.Application, error)
+	Update(ctx context.Context, params req.ApplicationUpdatePathParams, body req.ApplicationUpdate) (*db.Application, error)
 	UpdateSecret(ctx context.Context, id int, clientSecret string) (*db.Application, error)
 	Delete(ctx context.Context, params req.DeletePathParams) error
 }
@@ -147,11 +147,10 @@ func (r *applicationRepository) Create(ctx context.Context, body req.Application
 	return createRes, nil
 }
 
-func (r *applicationRepository) Update(ctx context.Context, params req.ApplicationUpdatePathParams, body req.ApplicationUpdate, clientSecret string) (*db.Application, error) {
+func (r *applicationRepository) Update(ctx context.Context, params req.ApplicationUpdatePathParams, body req.ApplicationUpdate) (*db.Application, error) {
 	updateRes, err := r.client.Application.UpdateOneID(params.ApplicationID).
 		SetName(body.Name).
 		SetClientID(body.ClientID).
-		SetClientSecret(hash.HashBlake2b256([]byte(clientSecret))).
 		SetRedirectUris(body.RedirectUris).
 		Save(ctx)
 	if err != nil {

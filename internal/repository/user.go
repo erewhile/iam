@@ -198,7 +198,7 @@ func (r *userRepository) Delete(ctx context.Context, params req.DeletePathParams
 		return errors.New("system user cannot be deleted")
 	}
 
-	return r.client.Role.UpdateOneID(params.ID).
+	return r.client.User.UpdateOneID(params.ID).
 		SetDeletedAt(utils.Now()).
 		Exec(ctx)
 }

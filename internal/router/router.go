@@ -4,6 +4,7 @@ import (
 	"github.com/erewhile/iam/internal/consts"
 	"github.com/erewhile/iam/internal/database"
 	"github.com/erewhile/iam/internal/middleware"
+	"github.com/erewhile/iam/internal/model"
 	"github.com/erewhile/iam/internal/wire"
 	"github.com/erewhile/iam/pkg/response"
 	"github.com/gin-gonic/gin"
@@ -46,7 +47,7 @@ func Init(e *gin.Engine) {
 	}
 
 	admin := protected.Group("")
-	admin.Use(middleware.RequireRoles(consts.RoleSuperAdmin))
+	admin.Use(middleware.RequireRoles(model.RoleSuperAdmin))
 	{
 		adminUsers := admin.Group("/users")
 		adminUsers.GET("", app.User.List)
@@ -74,6 +75,7 @@ func Init(e *gin.Engine) {
 		adminApps.GET("/:id", app.Application.Info)
 		adminApps.POST("", app.Application.Create)
 		adminApps.PUT("/:id", app.Application.Update)
+		adminApps.PUT("/:id/secret", app.Application.UpdateSecret)
 		adminApps.DELETE("/:id", app.Application.Delete)
 	}
 

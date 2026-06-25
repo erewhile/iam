@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -21,6 +21,7 @@ var (
 	globalLogger atomic.Value
 	level        zap.AtomicLevel
 	once         sync.Once
+	initErr      error
 )
 
 type nopSyncWriteSyncer struct {
@@ -39,109 +40,98 @@ func (w *nopSyncWriteSyncer) Sync() error {
 }
 
 func isUnsupportedSyncErr(err error) bool {
-	if runtime.GOOS == "windows" {
+	if errors.Is(err, os.ErrInvalid) {
 		return true
 	}
 
 	errStr := err.Error()
-	return errors.Is(err, os.ErrInvalid) ||
-		contains(errStr, "invalid argument") ||
-		contains(errStr, "not supported") ||
-		contains(errStr, "handle is invalid")
-}
-
-func contains(s, sub string) bool {
-	return len(s) >= len(sub) && (func() bool {
-		for i := 0; i+len(sub) <= len(s); i++ {
-			if s[i:i+len(sub)] == sub {
-				return true
-			}
-		}
-		return false
-	})()
+	return strings.Contains(errStr, "invalid argument") ||
+		strings.Contains(errStr, "not supported") ||
+		strings.Contains(errStr, "handle is invalid")
 }
 
 func Init(cfg config.Logger) error {
-	var initErr error
-
 	once.Do(func() {
-		if err := os.MkdirAll(cfg.LogsDir, 0o755); err != nil {
-			initErr = fmt.Errorf("failed to create log directory: %w", err)
-			return
-		}
-
-		level = zap.NewAtomicLevelAt(zap.InfoLevel)
-		if flags.Debug {
-			level.SetLevel(zap.DebugLevel)
-		}
-
-		encoderCfg := zap.NewProductionEncoderConfig()
-		encoderCfg.EncodeTime = zapcore.TimeEncoderOfLayout(time.RFC3339)
-		encoderCfg.EncodeLevel = zapcore.CapitalLevelEncoder
-		encoderCfg.EncodeCaller = zapcore.ShortCallerEncoder
-
-		jsonEncoder := zapcore.NewJSONEncoder(encoderCfg)
-
-		newWriter := func(filename string) zapcore.WriteSyncer {
-			ws := zapcore.AddSync(&lumberjack.Logger{
-				Filename:   filepath.Join(cfg.LogsDir, filename),
-				MaxSize:    cfg.MaxSize,
-				MaxBackups: cfg.MaxBackups,
-				MaxAge:     cfg.MaxAge,
-				Compress:   true,
-				LocalTime:  true,
-			})
-
-			return &zapcore.BufferedWriteSyncer{
-				WS:            ws,
-				Size:          256 * 1024,
-				FlushInterval: 5 * time.Second,
-			}
-		}
-
-		var cores []zapcore.Core
-
-		cores = append(cores, zapcore.NewCore(
-			jsonEncoder,
-			newWriter("info.log"),
-			zap.LevelEnablerFunc(func(lvl zapcore.Level) bool {
-				return level.Enabled(lvl) && lvl < zapcore.WarnLevel
-			}),
-		))
-
-		cores = append(cores, zapcore.NewCore(
-			jsonEncoder,
-			newWriter("error.log"),
-			zap.LevelEnablerFunc(func(lvl zapcore.Level) bool {
-				return level.Enabled(lvl) && lvl >= zapcore.WarnLevel
-			}),
-		))
-
-		if flags.Debug {
-			consoleEnc := zapcore.NewConsoleEncoder(zap.NewDevelopmentEncoderConfig())
-			stdoutSyncer := &nopSyncWriteSyncer{WriteSyncer: zapcore.AddSync(os.Stdout)}
-			cores = append(cores, zapcore.NewCore(
-				consoleEnc,
-				stdoutSyncer,
-				level,
-			))
-		}
-
-		core := zapcore.NewTee(cores...)
-
-		opts := []zap.Option{
-			zap.AddCaller(),
-			zap.AddCallerSkip(2),
-			zap.AddStacktrace(zapcore.ErrorLevel),
-		}
-		if flags.Debug {
-			opts = append(opts, zap.Development())
-		}
-
-		globalLogger.Store(zap.New(core, opts...))
+		initErr = doInit(cfg)
 	})
-
 	return initErr
+}
+
+func doInit(cfg config.Logger) error {
+	if err := os.MkdirAll(cfg.LogsDir, 0o755); err != nil {
+		return fmt.Errorf("failed to create log directory: %w", err)
+	}
+
+	level = zap.NewAtomicLevelAt(zap.InfoLevel)
+	if flags.Debug {
+		level.SetLevel(zap.DebugLevel)
+	}
+
+	encoderCfg := zap.NewProductionEncoderConfig()
+	encoderCfg.EncodeTime = zapcore.TimeEncoderOfLayout(time.RFC3339)
+	encoderCfg.EncodeLevel = zapcore.CapitalLevelEncoder
+	encoderCfg.EncodeCaller = zapcore.ShortCallerEncoder
+
+	jsonEncoder := zapcore.NewJSONEncoder(encoderCfg)
+
+	newWriter := func(filename string) zapcore.WriteSyncer {
+		ws := zapcore.AddSync(&lumberjack.Logger{
+			Filename:   filepath.Join(cfg.LogsDir, filename),
+			MaxSize:    cfg.MaxSize,
+			MaxBackups: cfg.MaxBackups,
+			MaxAge:     cfg.MaxAge,
+			Compress:   true,
+			LocalTime:  true,
+		})
+
+		return &zapcore.BufferedWriteSyncer{
+			WS:            ws,
+			Size:          256 * 1024,
+			FlushInterval: 5 * time.Second,
+		}
+	}
+
+	var cores []zapcore.Core
+
+	cores = append(cores, zapcore.NewCore(
+		jsonEncoder,
+		newWriter("info.log"),
+		zap.LevelEnablerFunc(func(lvl zapcore.Level) bool {
+			return level.Enabled(lvl) && lvl < zapcore.WarnLevel
+		}),
+	))
+
+	cores = append(cores, zapcore.NewCore(
+		jsonEncoder,
+		newWriter("error.log"),
+		zap.LevelEnablerFunc(func(lvl zapcore.Level) bool {
+			return level.Enabled(lvl) && lvl >= zapcore.WarnLevel
+		}),
+	))
+
+	if flags.Debug {
+		consoleEnc := zapcore.NewConsoleEncoder(zap.NewDevelopmentEncoderConfig())
+		stdoutSyncer := &nopSyncWriteSyncer{WriteSyncer: zapcore.AddSync(os.Stdout)}
+		cores = append(cores, zapcore.NewCore(
+			consoleEnc,
+			stdoutSyncer,
+			level,
+		))
+	}
+
+	core := zapcore.NewTee(cores...)
+
+	opts := []zap.Option{
+		zap.AddCaller(),
+		zap.AddCallerSkip(2),
+		zap.AddStacktrace(zapcore.ErrorLevel),
+	}
+	if flags.Debug {
+		opts = append(opts, zap.Development())
+	}
+
+	globalLogger.Store(zap.New(core, opts...))
+	return nil
 }
 
 func SetLevel(lvl zapcore.Level) {

@@ -9,6 +9,7 @@ import (
 	"github.com/erewhile/iam/internal/ent/db"
 	"github.com/erewhile/iam/internal/ent/db/role"
 	"github.com/erewhile/iam/internal/ent/db/user"
+	"github.com/erewhile/iam/internal/model"
 	"github.com/erewhile/iam/pkg/utils"
 )
 
@@ -21,7 +22,7 @@ type RoleRepository interface {
 	CountUsersByRoleCode(ctx context.Context, code string) (int, error)
 	Duplicate(ctx context.Context, name, code string, id ...int) (bool, error)
 	CountByIDs(ctx context.Context, ids []int) (int, error)
-	Create(ctx context.Context, params req.RoleCreate) (*db.Role, error)
+	Create(ctx context.Context, body req.RoleCreate) (*db.Role, error)
 	Update(ctx context.Context, params req.RoleUpdatePathParams, body req.RoleUpdate) (*db.Role, error)
 	Delete(ctx context.Context, params req.DeletePathParams) error
 }
@@ -188,6 +189,7 @@ func (r *roleRepository) Create(ctx context.Context, body req.RoleCreate) (*db.R
 	createRes, err := r.client.Role.Create().
 		SetCode(body.Code).
 		SetName(body.Name).
+		SetIsSystem(model.RoleStandard).
 		Save(ctx)
 	if err != nil {
 		return nil, err

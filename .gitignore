@@ -41,5 +41,5 @@ internal/wire/*_gen.go
 internal/ent/db
 
 # data
-data/
+/data
 config.json

@@ -118,12 +118,17 @@ type Store interface {
 	SetLastTimestamp(ctx context.Context, key string, timestamp int64) error
 }
 
+type keyLock struct {
+	mu   sync.Mutex
+	refs int
+}
+
 type TOTP struct {
 	config Config
 	store  Store
 
 	mu    sync.Mutex
-	locks map[string]*sync.Mutex
+	locks map[string]*keyLock
 }
 
 func New(config Config, store Store) (*TOTP, error) {
@@ -131,18 +136,31 @@ func New(config Config, store Store) (*TOTP, error) {
 	if err := config.Validate(); err != nil {
 		return nil, err
 	}
-	return &TOTP{config: config, store: store, locks: make(map[string]*sync.Mutex)}, nil
+	return &TOTP{config: config, store: store, locks: make(map[string]*keyLock)}, nil
 }
 
-func (v *TOTP) lockFor(key string) *sync.Mutex {
+func (v *TOTP) acquire(key string) func() {
 	v.mu.Lock()
-	defer v.mu.Unlock()
 	l, ok := v.locks[key]
 	if !ok {
-		l = &sync.Mutex{}
+		l = &keyLock{}
 		v.locks[key] = l
 	}
-	return l
+	l.refs++
+	v.mu.Unlock()
+
+	l.mu.Lock()
+
+	return func() {
+		l.mu.Unlock()
+
+		v.mu.Lock()
+		l.refs--
+		if l.refs <= 0 {
+			delete(v.locks, key)
+		}
+		v.mu.Unlock()
+	}
 }
 
 func (v *TOTP) Generate(secret string) (string, error) {
@@ -172,9 +190,8 @@ func (v *TOTP) ValidateAt(ctx context.Context, key, secret, code string, at time
 		return false, err
 	}
 
-	mu := v.lockFor(key)
-	mu.Lock()
-	defer mu.Unlock()
+	release := v.acquire(key)
+	defer release()
 
 	var lastUsedTS int64
 	if v.store != nil {

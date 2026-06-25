@@ -1,5 +1,7 @@
 package model
 
+const UserSystemID = 1
+
 type UserStatus uint8
 
 const (

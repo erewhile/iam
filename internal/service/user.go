@@ -7,7 +7,6 @@ import (
 
 	"github.com/erewhile/iam/config"
 	"github.com/erewhile/iam/internal/cache/rds"
-	"github.com/erewhile/iam/internal/consts"
 	"github.com/erewhile/iam/internal/dto/req"
 	"github.com/erewhile/iam/internal/dto/resp"
 	"github.com/erewhile/iam/internal/ent/db"
@@ -312,12 +311,15 @@ func (s *UserService) invalidateToken(ctx context.Context, sessionID uuid.UUID) 
 func (s *UserService) getUserRoleCodes(ctx context.Context, userID int) ([]string, error) {
 	roles, err := s.roleRepo.ListByUserID(ctx, userID)
 	if err != nil {
+		logger.Error("list roles by user id failed", err)
 		return nil, err
 	}
+
 	codes := make([]string, 0, len(roles))
 	for _, r := range roles {
 		codes = append(codes, r.Code)
 	}
+
 	return codes, nil
 }
 
@@ -514,14 +516,14 @@ func (s *UserService) Delete(ctx context.Context, params req.DeletePathParams) e
 }
 
 func (s *UserService) ensureNotLastAdmin(ctx context.Context, userID int) error {
-	isAdmin, err := s.roleRepo.UserHasRole(ctx, userID, consts.RoleSuperAdmin)
+	isAdmin, err := s.roleRepo.UserHasRole(ctx, userID, model.RoleSuperAdmin)
 	if err != nil {
 		return errors.New("failed to verify user role")
 	}
 	if !isAdmin {
 		return nil
 	}
-	count, err := s.roleRepo.CountUsersByRoleCode(ctx, consts.RoleSuperAdmin)
+	count, err := s.roleRepo.CountUsersByRoleCode(ctx, model.RoleSuperAdmin)
 	if err != nil {
 		return errors.New("failed to verify admin count")
 	}

@@ -48,7 +48,7 @@ func (s *ApplicationService) Info(ctx context.Context, params req.InfoPathParams
 	}, nil
 }
 
-func (s *ApplicationService) Create(ctx context.Context, body req.ApplicationCreate) (*resp.ApplicationSave, error) {
+func (s *ApplicationService) Create(ctx context.Context, body req.ApplicationCreate) (*resp.ApplicationCreate, error) {
 	exists, err := s.repo.Duplicate(ctx, body.Name, body.ClientID)
 	if err != nil {
 		logger.Error("failed to check if application exists", err)
@@ -70,16 +70,16 @@ func (s *ApplicationService) Create(ctx context.Context, body req.ApplicationCre
 		return nil, errors.New("failed to create application")
 	}
 
-	return &resp.ApplicationSave{
+	return &resp.ApplicationCreate{
 		ID:           applicationInfo.ID,
 		Name:         applicationInfo.Name,
 		ClientID:     applicationInfo.ClientID,
-		ClietnSecret: clientSecret,
+		ClientSecret: clientSecret,
 		RedirectUris: applicationInfo.RedirectUris,
 	}, nil
 }
 
-func (s *ApplicationService) Update(ctx context.Context, params req.ApplicationUpdatePathParams, body req.ApplicationUpdate) (*resp.ApplicationSave, error) {
+func (s *ApplicationService) Update(ctx context.Context, params req.ApplicationUpdatePathParams, body req.ApplicationUpdate) (*resp.ApplicationUpdate, error) {
 	applicationInfo, err := s.repo.GetByID(ctx, params.ApplicationID)
 	if err != nil {
 		if db.IsNotFound(err) {
@@ -98,21 +98,36 @@ func (s *ApplicationService) Update(ctx context.Context, params req.ApplicationU
 		return nil, errors.New("name or client_id or client_secret already exists")
 	}
 
-	clientSecret, err := utils.RandomString(64)
-	if err != nil {
-		return nil, err
-	}
-	_, err = s.repo.Update(ctx, params, body, clientSecret)
+	_, err = s.repo.Update(ctx, params, body)
 	if err != nil {
 		logger.Error("failed to update application", err)
 		return nil, errors.New("failed to update application")
 	}
 
-	return &resp.ApplicationSave{
+	return &resp.ApplicationUpdate{
 		ID:           applicationInfo.ID,
 		Name:         applicationInfo.Name,
 		ClientID:     applicationInfo.ClientID,
-		ClietnSecret: clientSecret,
+		RedirectUris: applicationInfo.RedirectUris,
+	}, nil
+}
+
+func (s *ApplicationService) UpdateSecret(ctx context.Context, params req.ApplicationUpdatePathParams) (*resp.ApplicationUpdateSecret, error) {
+	clientSecret, err := utils.RandomString(64)
+	if err != nil {
+		return nil, err
+	}
+
+	applicationInfo, err := s.repo.UpdateSecret(ctx, params.ApplicationID, clientSecret)
+	if err != nil {
+		return nil, err
+	}
+
+	return &resp.ApplicationUpdateSecret{
+		ID:           applicationInfo.ID,
+		Name:         applicationInfo.Name,
+		ClientID:     applicationInfo.ClientID,
+		ClientSecret: clientSecret,
 		RedirectUris: applicationInfo.RedirectUris,
 	}, nil
 }
@@ -132,15 +147,4 @@ func (s *ApplicationService) Delete(ctx context.Context, params req.DeletePathPa
 		return errors.New("failed to delete application")
 	}
 	return nil
-}
-
-func (s *ApplicationService) RegenerateSecret(ctx context.Context, params req.ApplicationUpdatePathParams) (string, error) {
-	clientSecret, err := utils.RandomString(64)
-	if err != nil {
-		return "", err
-	}
-	if _, err := s.repo.UpdateSecret(ctx, params.ApplicationID, clientSecret); err != nil {
-		return "", err
-	}
-	return clientSecret, nil
 }

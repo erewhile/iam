@@ -27,11 +27,6 @@ type Config struct {
 	WaitTimeout        time.Duration
 }
 
-type hasher struct {
-	config    *Config
-	semaphore chan struct{}
-}
-
 func DefaultConfig() *Config {
 	return &Config{
 		Time: 3, Memory: 1 << 15, Threads: 2,
@@ -40,11 +35,44 @@ func DefaultConfig() *Config {
 	}
 }
 
-func New(cfg *Config) *hasher {
+func (cfg *Config) withDefaults() *Config {
+	def := DefaultConfig()
 	if cfg == nil {
-		cfg = DefaultConfig()
+		return def
 	}
-	return &hasher{
+	out := *cfg
+	if out.Time == 0 {
+		out.Time = def.Time
+	}
+	if out.Memory == 0 {
+		out.Memory = def.Memory
+	}
+	if out.Threads == 0 {
+		out.Threads = def.Threads
+	}
+	if out.KeyLength == 0 {
+		out.KeyLength = def.KeyLength
+	}
+	if out.SaltLen == 0 {
+		out.SaltLen = def.SaltLen
+	}
+	if out.MaxConcurrency <= 0 {
+		out.MaxConcurrency = def.MaxConcurrency
+	}
+	if out.WaitTimeout <= 0 {
+		out.WaitTimeout = def.WaitTimeout
+	}
+	return &out
+}
+
+type Hasher struct {
+	config    *Config
+	semaphore chan struct{}
+}
+
+func New(cfg *Config) *Hasher {
+	cfg = cfg.withDefaults()
+	return &Hasher{
 		config:    cfg,
 		semaphore: make(chan struct{}, cfg.MaxConcurrency),
 	}
@@ -58,7 +86,7 @@ func Validate(password, encodedHash string) (bool, error) {
 	return defaultHasher.Validate(password, encodedHash)
 }
 
-func (h *hasher) Hash(password string) (string, error) {
+func (h *Hasher) Hash(password string) (string, error) {
 	if password == "" {
 		return "", errors.New("password cannot be empty")
 	}
@@ -89,7 +117,7 @@ func (h *hasher) Hash(password string) (string, error) {
 		defaultVariant, defaultVersion, h.config.Memory, h.config.Time, h.config.Threads, b64Salt, b64Hash), nil
 }
 
-func (h *hasher) Validate(password string, encodedHash string) (bool, error) {
+func (h *Hasher) Validate(password string, encodedHash string) (bool, error) {
 	if password == "" || encodedHash == "" {
 		return false, errors.New("credentials missing")
 	}
@@ -158,7 +186,7 @@ func (h *hasher) Validate(password string, encodedHash string) (bool, error) {
 	return subtle.ConstantTimeCompare(expectHash, actualHash) == 1, nil
 }
 
-func (h *hasher) acquire() error {
+func (h *Hasher) acquire() error {
 	select {
 	case h.semaphore <- struct{}{}:
 		return nil
@@ -175,4 +203,4 @@ func (h *hasher) acquire() error {
 	}
 }
 
-func (h *hasher) release() { <-h.semaphore }
+func (h *Hasher) release() { <-h.semaphore }

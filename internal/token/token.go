@@ -176,8 +176,7 @@ func Generate(
 	refreshJTI, _ := uuid.NewRandom()
 
 	accessStr, err := generate(
-		userPayload.UserID,
-		userPayload.UserUUID,
+		userPayload,
 		sessionID,
 		aad,
 		TokenTypeAccess,
@@ -189,9 +188,14 @@ func Generate(
 		return nil, fmt.Errorf("failed to generate access token: %w", err)
 	}
 
+	refreshPayload := UserPayload{
+		UserID:        userPayload.UserID,
+		UserUUID:      userPayload.UserUUID,
+		ApplicationID: userPayload.ApplicationID,
+	}
+
 	refreshStr, err := generate(
-		userPayload.UserID,
-		userPayload.UserUUID,
+		refreshPayload,
 		sessionID,
 		aad,
 		TokenTypeRefresh,
@@ -212,8 +216,7 @@ func Generate(
 }
 
 func generate(
-	userID int,
-	userUUID uuid.UUID,
+	payload UserPayload,
 	sessionID uuid.UUID,
 	aad []byte,
 	tokenType TokenType,
@@ -221,12 +224,6 @@ func generate(
 	exp time.Time,
 	device string,
 ) (string, error) {
-
-	payload := UserPayload{
-		UserID:   userID,
-		UserUUID: userUUID,
-	}
-
 	payloadBytes, err := json.Marshal(payload)
 	if err != nil {
 		return "", fmt.Errorf("failed to marshal payload: %w", err)
@@ -250,7 +247,7 @@ func generate(
 			IssuedAt:  jwt.NewNumericDate(utils.Now()),
 			NotBefore: jwt.NewNumericDate(utils.Now()),
 			Issuer:    "erewhile/iam",
-			Subject:   fmt.Sprintf("%d", userID),
+			Subject:   fmt.Sprintf("%d", payload.UserID),
 		},
 	}
 

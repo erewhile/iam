@@ -43,6 +43,9 @@ func setup() {
 }
 
 func release() {
+	if cancelCleanup != nil {
+		cancelCleanup()
+	}
 	database.Close()
 	rds.Close()
 	logger.Close()
@@ -75,26 +78,32 @@ func executeCleanup(ctx context.Context, repo repository.TokenRepository) {
 			logger.Info("cleanup job interrupted during batch execution due to application shutdown.")
 			return
 		default:
-			execCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-			affected, err := repo.ClearExpiredOrRevoked(execCtx)
-			cancel()
+		}
 
-			if err != nil {
-				logger.Error("failed to clear token batch", err)
-				return
+		execCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		affected, err := repo.ClearExpiredOrRevoked(execCtx)
+		cancel()
+
+		if err != nil {
+			logger.Error("failed to clear token batch", err)
+			return
+		}
+
+		if affected == 0 {
+			if totalDeleted > 0 {
+				logger.Info(fmt.Sprintf("batch cleanup finished. Total deleted: %d rows across %d batches.", totalDeleted, batchCount))
 			}
+			return
+		}
 
-			if affected == 0 {
-				if totalDeleted > 0 {
-					logger.Info(fmt.Sprintf("batch cleanup finished. Total deleted: %d rows across %d batches.", totalDeleted, batchCount))
-				}
-				return
-			}
+		totalDeleted += affected
+		batchCount++
 
-			totalDeleted += affected
-			batchCount++
-
-			time.Sleep(100 * time.Millisecond)
+		select {
+		case <-time.After(100 * time.Millisecond):
+		case <-ctx.Done():
+			logger.Info("cleanup job interrupted during sleep due to application shutdown.")
+			return
 		}
 	}
 }

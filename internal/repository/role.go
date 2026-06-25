@@ -2,11 +2,13 @@ package repository
 
 import (
 	"context"
+	"errors"
 
 	"github.com/erewhile/iam/internal/dto/req"
 	"github.com/erewhile/iam/internal/dto/resp"
 	"github.com/erewhile/iam/internal/ent/db"
 	"github.com/erewhile/iam/internal/ent/db/role"
+	"github.com/erewhile/iam/internal/ent/db/user"
 	"github.com/erewhile/iam/pkg/utils"
 )
 
@@ -14,6 +16,7 @@ type RoleRepository interface {
 	List(ctx context.Context, params req.RoleList) ([]resp.RoleListItem, int, error)
 	GetByID(ctx context.Context, id int) (*db.Role, error)
 	GetByCode(ctx context.Context, code string) (*db.Role, error)
+	ListByUserID(ctx context.Context, userID int) ([]*db.Role, error)
 	Duplicate(ctx context.Context, name, code string, id ...int) (bool, error)
 	CountByIDs(ctx context.Context, ids []int) (int, error)
 	Create(ctx context.Context, params req.RoleCreate) (*db.Role, error)
@@ -110,6 +113,15 @@ func (r *roleRepository) GetByCode(ctx context.Context, code string) (*db.Role, 
 	return roleInfo, nil
 }
 
+func (r *roleRepository) ListByUserID(ctx context.Context, userID int) ([]*db.Role, error) {
+	return r.client.Role.Query().
+		Where(
+			role.DeletedAtIsNil(),
+			role.HasUsersWith(user.IDEQ(userID)),
+		).
+		All(ctx)
+}
+
 func (r *roleRepository) CountByIDs(ctx context.Context, ids []int) (int, error) {
 	if len(ids) == 0 {
 		return 0, nil
@@ -168,6 +180,13 @@ func (r *roleRepository) Update(ctx context.Context, params req.RoleUpdatePathPa
 }
 
 func (r *roleRepository) Delete(ctx context.Context, params req.DeletePathParams) error {
+	roleInfo, err := r.GetByID(ctx, params.ID)
+	if err != nil {
+		return err
+	}
+	if roleInfo.IsSystem {
+		return errors.New("system role cannot be deleted")
+	}
 	return r.client.Role.UpdateOneID(params.ID).
 		SetDeletedAt(utils.Now()).
 		Exec(ctx)

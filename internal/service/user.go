@@ -23,6 +23,7 @@ import (
 type UserService struct {
 	repo         repository.UserRepository
 	token        repository.TokenRepository
+	roleRepo     repository.RoleRepository
 	transactor   *repository.Transactor
 	tokenCache   rds.TokenCache
 	sessionCache rds.IAMSessionCache
@@ -31,6 +32,7 @@ type UserService struct {
 func NewUserService(
 	repo repository.UserRepository,
 	token repository.TokenRepository,
+	roleRepo repository.RoleRepository,
 	transactor *repository.Transactor,
 	tokenCache rds.TokenCache,
 	sessionCache rds.IAMSessionCache,
@@ -38,6 +40,7 @@ func NewUserService(
 	return &UserService{
 		repo:         repo,
 		token:        token,
+		roleRepo:     roleRepo,
 		transactor:   transactor,
 		tokenCache:   tokenCache,
 		sessionCache: sessionCache,
@@ -67,10 +70,18 @@ func (s *UserService) Login(ctx context.Context, body req.UserLogin) (*token.Tok
 		return nil, "", errors.New("wrong password")
 	}
 
+	roleCodes, err := s.getUserRoleCodes(ctx, userInfo.ID)
+	if err != nil {
+		logger.Error("get user roles failed", err)
+		return nil, "", errors.New("login failed")
+	}
+
 	sessionID := uuid.New()
 	userPayload := token.UserPayload{
-		UserID:   userInfo.ID,
-		UserUUID: userInfo.UUID,
+		UserID:        userInfo.ID,
+		UserUUID:      userInfo.UUID,
+		ApplicationID: nil,
+		Roles:         roleCodes,
 	}
 
 	tokenPair, err := s.issueTokenPair(ctx, userPayload, sessionID, body.RequestMeta)
@@ -87,10 +98,18 @@ func (s *UserService) Login(ctx context.Context, body req.UserLogin) (*token.Tok
 	return tokenPair, sid, nil
 }
 
-func (s *UserService) LoginWithOAuthCode(ctx context.Context, payload *rds.OAuthCodePayload, meta req.RequestMeta) (*token.TokenPair, error) {
+func (s *UserService) LoginWithOAuthCode(ctx context.Context, payload *rds.OAuthCodePayload, applicationID int, meta req.RequestMeta) (*token.TokenPair, error) {
+	roleCodes, err := s.getUserRoleCodes(ctx, payload.UserID)
+	if err != nil {
+		logger.Error("get user roles failed", err)
+		return nil, errors.New("issue token failed")
+	}
+
 	userPayload := token.UserPayload{
-		UserID:   payload.UserID,
-		UserUUID: payload.SessionID,
+		UserID:        payload.UserID,
+		UserUUID:      payload.UserUUID,
+		ApplicationID: &applicationID,
+		Roles:         roleCodes,
 	}
 	return s.issueTokenPair(ctx, userPayload, payload.SessionID, meta)
 }
@@ -133,6 +152,12 @@ func (s *UserService) Refresh(ctx context.Context, params req.UserRefresh) (*tok
 		return nil, errors.New("account is not active")
 	}
 
+	roleCodes, err := s.getUserRoleCodes(ctx, payload.UserID)
+	if err != nil {
+		logger.Error("get user roles failed", err)
+		return nil, errors.New("refresh failed")
+	}
+
 	if err := s.token.RevokeBySession(ctx, claims.SessionID); err != nil {
 		logger.Error("revoke failed", err)
 		return nil, errors.New("revoke failed")
@@ -142,8 +167,10 @@ func (s *UserService) Refresh(ctx context.Context, params req.UserRefresh) (*tok
 
 	newSessionID := uuid.New()
 	userPayload := token.UserPayload{
-		UserID:   payload.UserID,
-		UserUUID: payload.UserUUID,
+		UserID:        payload.UserID,
+		UserUUID:      payload.UserUUID,
+		ApplicationID: payload.ApplicationID,
+		Roles:         roleCodes,
 	}
 	return s.issueTokenPair(ctx, userPayload, newSessionID, params.RequestMeta)
 }
@@ -235,6 +262,18 @@ func (s *UserService) invalidateToken(ctx context.Context, sessionID uuid.UUID) 
 	if err := s.tokenCache.DelRefresh(ctx, sessionID); err != nil {
 		logger.Error("del refresh cache failed", err)
 	}
+}
+
+func (s *UserService) getUserRoleCodes(ctx context.Context, userID int) ([]string, error) {
+	roles, err := s.roleRepo.ListByUserID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	codes := make([]string, 0, len(roles))
+	for _, r := range roles {
+		codes = append(codes, r.Code)
+	}
+	return codes, nil
 }
 
 func (s *UserService) StartSession(ctx context.Context, userID int, userUUID uuid.UUID) (string, error) {

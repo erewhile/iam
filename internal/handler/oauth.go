@@ -111,7 +111,8 @@ func (h *OAuthHandler) ExchangeToken(c *gin.Context) {
 
 	ctx := c.Request.Context()
 
-	if _, err := h.oauthService.ValidateClient(ctx, params.ClientID, params.ClientSecret); err != nil {
+	app, err := h.oauthService.ValidateClient(ctx, params.ClientID, params.ClientSecret)
+	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrClientNotFound), errors.Is(err, service.ErrClientSecretWrong):
 			response.BadRequest(c.Writer, "invalid client credentials")
@@ -134,7 +135,7 @@ func (h *OAuthHandler) ExchangeToken(c *gin.Context) {
 	}
 
 	meta := req.GetRequestMeta(c.Request)
-	tokenPair, err := h.userService.LoginWithOAuthCode(ctx, payload, meta)
+	tokenPair, err := h.userService.LoginWithOAuthCode(ctx, payload, app.ID, meta)
 	if err != nil {
 		response.Custom(c.Writer, http.StatusInternalServerError, "failed to issue token")
 		return

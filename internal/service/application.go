@@ -9,6 +9,7 @@ import (
 	"github.com/erewhile/iam/internal/ent/db"
 	"github.com/erewhile/iam/internal/logger"
 	"github.com/erewhile/iam/internal/repository"
+	"github.com/erewhile/iam/pkg/utils"
 )
 
 type ApplicationService struct {
@@ -47,51 +48,73 @@ func (s *ApplicationService) Info(ctx context.Context, params req.InfoPathParams
 	}, nil
 }
 
-func (s *ApplicationService) Create(ctx context.Context, body req.ApplicationCreate) error {
-	exists, err := s.repo.Duplicate(ctx, body.Name, body.ClientID, body.ClientSecret)
+func (s *ApplicationService) Create(ctx context.Context, body req.ApplicationCreate) (*resp.ApplicationSave, error) {
+	exists, err := s.repo.Duplicate(ctx, body.Name, body.ClientID)
 	if err != nil {
 		logger.Error("failed to check if application exists", err)
-		return errors.New("failed to check if application exists")
+		return nil, errors.New("failed to check if application exists")
 	}
 
 	if exists {
-		return errors.New("name or client_id or client_secret already exists")
+		return nil, errors.New("name or client_id or client_secret already exists")
 	}
 
-	_, err = s.repo.Create(ctx, body)
+	clientSecret, err := utils.RandomString(64)
+	if err != nil {
+		return nil, err
+	}
+
+	applicationInfo, err := s.repo.Create(ctx, body, clientSecret)
 	if err != nil {
 		logger.Error("failed to create application", err)
-		return errors.New("failed to create application")
+		return nil, errors.New("failed to create application")
 	}
-	return nil
+
+	return &resp.ApplicationSave{
+		ID:           applicationInfo.ID,
+		Name:         applicationInfo.Name,
+		ClientID:     applicationInfo.ClientID,
+		ClietnSecret: clientSecret,
+		RedirectUris: applicationInfo.RedirectUris,
+	}, nil
 }
 
-func (s *ApplicationService) Update(ctx context.Context, params req.ApplicationUpdatePathParams, body req.ApplicationUpdate) error {
-	_, err := s.repo.GetByID(ctx, params.ApplicationID)
+func (s *ApplicationService) Update(ctx context.Context, params req.ApplicationUpdatePathParams, body req.ApplicationUpdate) (*resp.ApplicationSave, error) {
+	applicationInfo, err := s.repo.GetByID(ctx, params.ApplicationID)
 	if err != nil {
 		if db.IsNotFound(err) {
-			return errors.New("application not found")
+			return nil, errors.New("application not found")
 		}
 		logger.Error("get application failed", err)
-		return errors.New("failed to get application info")
+		return nil, errors.New("failed to get application info")
 	}
 
-	exists, err := s.repo.Duplicate(ctx, body.Name, body.ClientID, body.ClientSecret, params.ApplicationID)
+	exists, err := s.repo.Duplicate(ctx, body.Name, body.ClientID, params.ApplicationID)
 	if err != nil {
 		logger.Error("failed to check if application exists", err)
-		return errors.New("failed to check if application exists")
+		return nil, errors.New("failed to check if application exists")
 	}
 	if exists {
-		return errors.New("name or client_id or client_secret already exists")
+		return nil, errors.New("name or client_id or client_secret already exists")
 	}
 
-	_, err = s.repo.Update(ctx, params, body)
+	clientSecret, err := utils.RandomString(64)
+	if err != nil {
+		return nil, err
+	}
+	_, err = s.repo.Update(ctx, params, body, clientSecret)
 	if err != nil {
 		logger.Error("failed to update application", err)
-		return errors.New("failed to update application")
+		return nil, errors.New("failed to update application")
 	}
 
-	return nil
+	return &resp.ApplicationSave{
+		ID:           applicationInfo.ID,
+		Name:         applicationInfo.Name,
+		ClientID:     applicationInfo.ClientID,
+		ClietnSecret: clientSecret,
+		RedirectUris: applicationInfo.RedirectUris,
+	}, nil
 }
 
 func (s *ApplicationService) Delete(ctx context.Context, params req.DeletePathParams) error {
@@ -109,4 +132,15 @@ func (s *ApplicationService) Delete(ctx context.Context, params req.DeletePathPa
 		return errors.New("failed to delete application")
 	}
 	return nil
+}
+
+func (s *ApplicationService) RegenerateSecret(ctx context.Context, params req.ApplicationUpdatePathParams) (string, error) {
+	clientSecret, err := utils.RandomString(64)
+	if err != nil {
+		return "", err
+	}
+	if _, err := s.repo.UpdateSecret(ctx, params.ApplicationID, clientSecret); err != nil {
+		return "", err
+	}
+	return clientSecret, nil
 }

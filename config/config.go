@@ -126,7 +126,7 @@ func defaultConfig() *Config {
 	logsDir := filepath.Join(flags.Data, "logs")
 
 	mustGenKey := func() string {
-		if s, err := utils.RandomCryptoToken(32); err == nil {
+		if s, err := utils.RandomAlphanumeric(32); err == nil {
 			return s
 		}
 

@@ -62,12 +62,13 @@ func (h *ApplicationHandler) Create(c *gin.Context) {
 	}
 
 	ctx := c.Request.Context()
-	if err := h.srv.Create(ctx, body); err != nil {
+	res, err := h.srv.Create(ctx, body)
+	if err != nil {
 		response.BadRequest(c.Writer, err.Error())
 		return
 	}
 
-	response.OK(c.Writer)
+	response.OkData(c.Writer, res)
 }
 
 func (h *ApplicationHandler) Update(c *gin.Context) {
@@ -84,12 +85,13 @@ func (h *ApplicationHandler) Update(c *gin.Context) {
 	}
 
 	ctx := c.Request.Context()
-	if err := h.srv.Update(ctx, params, body); err != nil {
+	res, err := h.srv.Update(ctx, params, body)
+	if err != nil {
 		response.BadRequest(c.Writer, err.Error())
 		return
 	}
 
-	response.OK(c.Writer)
+	response.OkData(c.Writer, res)
 }
 
 func (h *ApplicationHandler) Delete(c *gin.Context) {

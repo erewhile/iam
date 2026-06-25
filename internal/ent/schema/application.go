@@ -35,7 +35,6 @@ func (Application) Fields() []ent.Field {
 
 		field.Bytes("client_secret").
 			NotEmpty().
-			Unique().
 			MaxLen(32).
 			SchemaType(map[string]string{
 				"mysql": "binary(32)",

@@ -2,12 +2,12 @@ package repository
 
 import (
 	"context"
+	"errors"
 
 	"github.com/erewhile/iam/internal/dto/req"
 	"github.com/erewhile/iam/internal/dto/resp"
 	"github.com/erewhile/iam/internal/ent/db"
 	"github.com/erewhile/iam/internal/ent/db/user"
-	"github.com/erewhile/iam/internal/model"
 	"github.com/erewhile/iam/pkg/utils"
 	"github.com/google/uuid"
 )
@@ -190,8 +190,15 @@ func (r *userRepository) Update(ctx context.Context, params req.UserUpdatePathPa
 }
 
 func (r *userRepository) Delete(ctx context.Context, params req.DeletePathParams) error {
-	return r.client.User.UpdateOneID(params.ID).
+	userInfo, err := r.GetByID(ctx, params.ID)
+	if err != nil {
+		return err
+	}
+	if userInfo.IsSystem {
+		return errors.New("system user cannot be deleted")
+	}
+
+	return r.client.Role.UpdateOneID(params.ID).
 		SetDeletedAt(utils.Now()).
-		SetStatus(model.UserStatusDisabled).
 		Exec(ctx)
 }

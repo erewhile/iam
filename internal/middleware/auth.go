@@ -14,6 +14,8 @@ import (
 )
 
 func Auth() gin.HandlerFunc {
+	tokenCache := rds.NewTokenCache() // 只在中间件初始化时创建一次
+
 	return func(c *gin.Context) {
 		cookieUtil := utils.NewCookieUtil(!flags.Debug)
 		accessToken, err := cookieUtil.Get(c.Request, config.Get().Token.AccessTokenCookieKey)
@@ -30,7 +32,6 @@ func Auth() gin.HandlerFunc {
 			return
 		}
 
-		tokenCache := rds.NewTokenCache()
 		online, err := tokenCache.ExistsAccess(c.Request.Context(), claims.SessionID)
 		if err != nil || !online {
 			response.Custom(c.Writer, http.StatusUnauthorized, "session expired or logged out")
@@ -41,6 +42,8 @@ func Auth() gin.HandlerFunc {
 		c.Set(consts.MiddlewareUserID, payload.UserID)
 		c.Set(consts.MiddlewareUserUUID, payload.UserUUID)
 		c.Set(consts.MiddlewareSessionID, claims.SessionID)
+		c.Set(consts.MiddlewareApplicationID, payload.ApplicationID)
+		c.Set(consts.MiddlewareRoles, payload.Roles)
 
 		c.Next()
 	}

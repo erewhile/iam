@@ -15,9 +15,10 @@ type ApplicationRepository interface {
 	List(ctx context.Context, params req.ApplicationList) ([]resp.ApplicationListItem, int, error)
 	GetByID(ctx context.Context, id int) (*db.Application, error)
 	GetByClientID(ctx context.Context, clientID string) (*db.Application, error)
-	Duplicate(ctx context.Context, name, clientID, clientSecret string, id ...int) (bool, error)
-	Create(ctx context.Context, body req.ApplicationCreate) (*db.Application, error)
-	Update(ctx context.Context, params req.ApplicationUpdatePathParams, body req.ApplicationUpdate) (*db.Application, error)
+	Duplicate(ctx context.Context, name, clientID string, id ...int) (bool, error)
+	Create(ctx context.Context, body req.ApplicationCreate, clientSecret string) (*db.Application, error)
+	Update(ctx context.Context, params req.ApplicationUpdatePathParams, body req.ApplicationUpdate, clientSecret string) (*db.Application, error)
+	UpdateSecret(ctx context.Context, id int, clientSecret string) (*db.Application, error)
 	Delete(ctx context.Context, params req.DeletePathParams) error
 }
 
@@ -70,10 +71,10 @@ func (r *applicationRepository) List(ctx context.Context, params req.Application
 	result := make([]resp.ApplicationListItem, 0, len(applications))
 	for _, item := range applications {
 		result = append(result, resp.ApplicationListItem{
-			ID:              item.ID,
-			Name:            item.Name,
-			ClientID:        item.ClientID,
-			RedirectUris:    item.RedirectUris,
+			ID:           item.ID,
+			Name:         item.Name,
+			ClientID:     item.ClientID,
+			RedirectUris: item.RedirectUris,
 		})
 	}
 
@@ -111,13 +112,12 @@ func (r *applicationRepository) GetByClientID(ctx context.Context, clientID stri
 	return applicationInfo, nil
 }
 
-func (r *applicationRepository) Duplicate(ctx context.Context, name, clientID, clientSecret string, id ...int) (bool, error) {
+func (r *applicationRepository) Duplicate(ctx context.Context, name, clientID string, id ...int) (bool, error) {
 	query := r.client.Application.Query().
 		Where(
 			application.Or(
 				application.NameEQ(name),
 				application.ClientIDEQ(clientID),
-				application.ClientSecretEQ(hash.HashBlake2b256([]byte(clientSecret))),
 			),
 		)
 
@@ -133,11 +133,11 @@ func (r *applicationRepository) Duplicate(ctx context.Context, name, clientID, c
 	return exist, nil
 }
 
-func (r *applicationRepository) Create(ctx context.Context, body req.ApplicationCreate) (*db.Application, error) {
+func (r *applicationRepository) Create(ctx context.Context, body req.ApplicationCreate, clientSecret string) (*db.Application, error) {
 	createRes, err := r.client.Application.Create().
 		SetName(body.Name).
 		SetClientID(body.ClientID).
-		SetClientSecret(hash.HashBlake2b256([]byte(body.ClientSecret))).
+		SetClientSecret(hash.HashBlake2b256([]byte(clientSecret))).
 		SetRedirectUris(body.RedirectUris).
 		Save(ctx)
 	if err != nil {
@@ -147,12 +147,23 @@ func (r *applicationRepository) Create(ctx context.Context, body req.Application
 	return createRes, nil
 }
 
-func (r *applicationRepository) Update(ctx context.Context, params req.ApplicationUpdatePathParams, body req.ApplicationUpdate) (*db.Application, error) {
+func (r *applicationRepository) Update(ctx context.Context, params req.ApplicationUpdatePathParams, body req.ApplicationUpdate, clientSecret string) (*db.Application, error) {
 	updateRes, err := r.client.Application.UpdateOneID(params.ApplicationID).
 		SetName(body.Name).
 		SetClientID(body.ClientID).
-		SetClientSecret(hash.HashBlake2b256([]byte(body.ClientSecret))).
+		SetClientSecret(hash.HashBlake2b256([]byte(clientSecret))).
 		SetRedirectUris(body.RedirectUris).
+		Save(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return updateRes, nil
+}
+
+func (r *applicationRepository) UpdateSecret(ctx context.Context, id int, clientSecret string) (*db.Application, error) {
+	updateRes, err := r.client.Application.UpdateOneID(id).
+		SetClientSecret(hash.HashBlake2b256([]byte(clientSecret))).
 		Save(ctx)
 	if err != nil {
 		return nil, err

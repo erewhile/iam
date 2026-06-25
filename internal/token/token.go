@@ -31,8 +31,10 @@ var (
 )
 
 type UserPayload struct {
-	UserID   int       `json:"user_id"`
-	UserUUID uuid.UUID `json:"user_uuid"`
+	UserID        int       `json:"user_id"`
+	UserUUID      uuid.UUID `json:"user_uuid"`
+	ApplicationID *int      `json:"application_id,omitempty"`
+	Roles         []string  `json:"roles,omitempty"`
 }
 
 type Claims struct {

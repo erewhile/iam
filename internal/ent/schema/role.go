@@ -35,6 +35,9 @@ func (Role) Fields() []ent.Field {
 
 		field.String("name").
 			MaxLen(64),
+
+		field.Bool("is_system").
+			Default(false),
 	}
 }
 

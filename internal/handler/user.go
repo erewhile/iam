@@ -96,16 +96,19 @@ func (h *UserHandler) Profile(c *gin.Context) {
 		response.Custom(c.Writer, http.StatusOK, "missing uuid")
 		return
 	}
-
 	userUUID, ok := uuidVal.(uuid.UUID)
 	if !ok {
 		response.Custom(c.Writer, http.StatusOK, "invalid uuid type")
 		return
 	}
 
+	rolesVal, _ := c.Get(consts.MiddlewareRoles)
+	roles, _ := rolesVal.([]string)
+
 	response.OkData(c.Writer, &resp.UserProfile{
 		UserID:   userID,
 		UserUUID: userUUID,
+		Roles:    roles,
 	})
 }
 

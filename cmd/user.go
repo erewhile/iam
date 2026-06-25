@@ -4,12 +4,15 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/erewhile/iam/config"
 	"github.com/erewhile/iam/internal/database"
+	"github.com/erewhile/iam/internal/database/data"
 	"github.com/erewhile/iam/internal/dto/req"
+	"github.com/erewhile/iam/internal/ent/db"
 	"github.com/erewhile/iam/internal/model"
 	"github.com/erewhile/iam/internal/repository"
 	"github.com/erewhile/iam/pkg/password"
@@ -31,9 +34,10 @@ var (
 )
 
 var userAddCmd = &cobra.Command{
-	Use:   "add",
-	Short: "create a new user with a randomly generated password",
-	RunE:  runUserAdd,
+	Use:          "add",
+	Short:        "create a new user with a randomly generated password",
+	SilenceUsage: true,
+	RunE:         runUserAdd,
 }
 
 func runUserAdd(cmd *cobra.Command, args []string) error {
@@ -45,6 +49,21 @@ func runUserAdd(cmd *cobra.Command, args []string) error {
 	}
 	defer database.Close()
 
+	client := database.GetDB()
+	userRepo := repository.NewUserRepository(client)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	_, err := userRepo.GetByID(ctx, model.UserSystemID)
+	if err != nil {
+		if !db.IsNotFound(err) {
+			return fmt.Errorf("failed to get user info: %w", err)
+		}
+	} else {
+		return errors.New("admin already exists")
+	}
+
 	passwordStr, err := randomPassword(8)
 	if err != nil {
 		return fmt.Errorf("failed to generate random password: %w", err)
@@ -55,10 +74,6 @@ func runUserAdd(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to hash password: %w", err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	userRepo := repository.NewUserRepository(database.GetDB())
 	u, err := userRepo.Create(ctx, req.UserCreate{
 		Email:    addUserEmail,
 		Username: addUserUsername,
@@ -66,6 +81,10 @@ func runUserAdd(cmd *cobra.Command, args []string) error {
 	}, hashed, model.UserSystem)
 	if err != nil {
 		return fmt.Errorf("failed to create user: %w", err)
+	}
+
+	if err := data.InitData(client); err != nil {
+		return fmt.Errorf("failed to init system role data: %w", err)
 	}
 
 	fmt.Println("user created successfully, save the password now — it will not be shown again:")

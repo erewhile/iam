@@ -8,6 +8,11 @@ type UserLogin struct {
 	RequestMeta RequestMeta `json:"-"`
 }
 
+type UserShowLogin struct {
+	Redirect string `form:"redirect" json:"redirect"`
+	ClientID string `form:"client_id" json:"client_id"`
+}
+
 type UserRefresh struct {
 	Token       string
 	RequestMeta RequestMeta

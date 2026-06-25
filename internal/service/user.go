@@ -24,6 +24,7 @@ type UserService struct {
 	repo         repository.UserRepository
 	token        repository.TokenRepository
 	roleRepo     repository.RoleRepository
+	appRepo      repository.ApplicationRepository
 	transactor   *repository.Transactor
 	tokenCache   rds.TokenCache
 	sessionCache rds.IAMSessionCache
@@ -34,6 +35,7 @@ func NewUserService(
 	repo repository.UserRepository,
 	token repository.TokenRepository,
 	roleRepo repository.RoleRepository,
+	appRepo repository.ApplicationRepository,
 	transactor *repository.Transactor,
 	tokenCache rds.TokenCache,
 	sessionCache rds.IAMSessionCache,
@@ -43,12 +45,18 @@ func NewUserService(
 		repo:         repo,
 		token:        token,
 		roleRepo:     roleRepo,
+		appRepo:      appRepo,
 		transactor:   transactor,
 		tokenCache:   tokenCache,
 		sessionCache: sessionCache,
 		loginAttempt: loginAttempt,
 	}
 }
+
+var (
+	ErrInvalidClient   = errors.New("invalid client identifier")
+	ErrInvalidRedirect = errors.New("redirect uri is strictly blocked by security policy")
+)
 
 func (s *UserService) Login(ctx context.Context, body req.UserLogin) (*token.TokenPair, string, error) {
 	sec := config.Get().LoginSecurity

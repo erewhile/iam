@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 	"net/url"
 	"strings"
@@ -31,32 +32,49 @@ func NewUserHandler(srv *service.UserService) *UserHandler {
 
 var loginTpl = template.Must(template.ParseFS(templates.FS, "login.html"))
 
-func isValidRedirect(redirect string) bool {
+func (h *UserHandler) validateRedirect(redirect string) (string, error) {
 	if redirect == "" {
-		return false
+		return "/", nil
 	}
-	if strings.HasPrefix(redirect, "//") {
-		return false
+
+	inputURL, err := url.Parse(redirect)
+	if err != nil {
+		return "/", nil
 	}
-	u, err := url.Parse(redirect)
-	if err != nil || u.IsAbs() {
-		return false
+
+	if inputURL.IsAbs() || inputURL.Host != "" {
+		return "", errors.New("prohibited external redirect")
 	}
-	return strings.HasPrefix(u.Path, consts.OAuthAuthorizePath)
+
+	if !strings.HasPrefix(redirect, "/") {
+		return "/", nil
+	}
+
+	return redirect, nil
 }
 
 func (h *UserHandler) ShowLogin(c *gin.Context) {
-	redirect := c.Query("redirect")
+	var params req.UserShowLogin
+	if err := c.ShouldBindQuery(&params); err != nil {
+		response.Fail(c.Writer, code.Parameter)
+		return
+	}
 
-	if !isValidRedirect(redirect) {
-		redirect = ""
+	finalRedirect, err := h.validateRedirect(params.Redirect)
+	if err != nil {
+		logger.Error("validate redirect failed", err)
+		finalRedirect = ""
+	}
+
+	if params.Redirect != "" && finalRedirect == "" {
+		logger.Warn("Redirect URL was blocked or invalid", "input", params.Redirect)
 	}
 
 	c.Header("Content-Type", "text/html; charset=utf-8")
 	c.Writer.WriteHeader(http.StatusOK)
 
-	err := loginTpl.Execute(c.Writer, gin.H{
-		"Redirect":    redirect,
+	err = loginTpl.Execute(c.Writer, gin.H{
+		"Redirect":    finalRedirect,
 		"LoginApiUrl": consts.AuthLoginPath,
 	})
 	if err != nil {
@@ -81,9 +99,24 @@ func (h *UserHandler) Login(c *gin.Context) {
 	}
 
 	cookieUtil := utils.NewCookieUtil(!flags.Debug)
-	cookieUtil.Set(c.Writer, config.Get().Token.AccessTokenCookieKey, tokenPair.AccessToken, int(config.Get().Token.AccessTokenTTL.Seconds()))
-	cookieUtil.Set(c.Writer, config.Get().Token.RefreshTokenCookieKey, tokenPair.RefreshToken, int(config.Get().Token.RefreshTokenTTL.Seconds()))
-	cookieUtil.Set(c.Writer, config.Get().Session.CookieKey, sid, int(config.Get().Session.CookieTTL.Seconds()))
+	cookieUtil.Set(
+		c.Writer,
+		config.Get().Token.AccessTokenCookieKey,
+		tokenPair.AccessToken,
+		int(config.Get().Token.AccessTokenTTL.Seconds()),
+	)
+	cookieUtil.Set(
+		c.Writer,
+		config.Get().Token.RefreshTokenCookieKey,
+		tokenPair.RefreshToken,
+		int(config.Get().Token.RefreshTokenTTL.Seconds()),
+	)
+	cookieUtil.Set(
+		c.Writer,
+		config.Get().Session.CookieKey,
+		sid,
+		int(config.Get().Session.CookieTTL.Seconds()),
+	)
 
 	response.OK(c.Writer)
 }
@@ -172,6 +205,7 @@ func (h *UserHandler) Logout(c *gin.Context) {
 
 	cookieUtil.Delete(c.Writer, config.Get().Token.AccessTokenCookieKey)
 	cookieUtil.Delete(c.Writer, config.Get().Token.RefreshTokenCookieKey)
+	cookieUtil.Delete(c.Writer, config.Get().Session.CookieKey)
 
 	response.OK(c.Writer)
 }

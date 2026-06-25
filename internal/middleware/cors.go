@@ -7,13 +7,13 @@ import (
 )
 
 func CORS() gin.HandlerFunc {
-	config := cors.Config{
-		AllowOrigins:     config.Get().CORS.AllowOrigins,
-		AllowMethods:     config.Get().CORS.AllowMethods,
-		AllowHeaders:     config.Get().CORS.AllowHeaders,
-		AllowCredentials: config.Get().CORS.AllowCredentials,
-		MaxAge:           config.Get().CORS.MaxAge,
+	cfg := config.Get().CORS
+	corsConfig := cors.Config{
+		AllowOrigins:     cfg.AllowOrigins,
+		AllowMethods:     cfg.AllowMethods,
+		AllowHeaders:     cfg.AllowHeaders,
+		AllowCredentials: cfg.AllowCredentials,
+		MaxAge:           cfg.MaxAge,
 	}
-
-	return cors.New(config)
+	return cors.New(corsConfig)
 }

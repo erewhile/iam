@@ -16,6 +16,7 @@ import (
 	"github.com/erewhile/iam/pkg/response"
 	"github.com/erewhile/iam/pkg/response/code"
 	"github.com/erewhile/iam/pkg/utils"
+	"github.com/erewhile/iam/templates"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
@@ -28,67 +29,7 @@ func NewUserHandler(srv *service.UserService) *UserHandler {
 	return &UserHandler{srv: srv}
 }
 
-var loginTpl = template.Must(template.New("login").Parse(loginPageTpl))
-
-const loginPageTpl = `<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Sign In</title>
-</head>
-<body>
-<h1>Sign In</h1>
-<p id="error-msg" style="color:red; display:none;"></p>
-
-<form id="loginForm" method="POST" action="{{.LoginApiUrl}}">
-  <input type="hidden" id="redirect" name="redirect" value="{{.Redirect}}">
-  <label>Username <input type="text" id="username" name="username" required autofocus></label><br>
-  <label>Password <input type="password" id="password" name="password" required></label><br>
-  <button type="submit">Sign In</button>
-</form>
-
-<script>
-document.getElementById('loginForm').addEventListener('submit', async function(e) {
-    e.preventDefault();
-    
-    const errorEl = document.getElementById('error-msg');
-    errorEl.style.display = 'none';
-
-    const data = {
-        username: document.getElementById('username').value,
-        password: document.getElementById('password').value
-    };
-
-    try {
-        const response = await fetch(this.action, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-    		credentials: 'include',
-            body: JSON.stringify(data)
-        });
-
-        if (response.ok) {
-            let redirectUrl = document.getElementById('redirect').value.trim();
-            if (redirectUrl) {
-                window.location.href = redirectUrl;
-            } else {
-                window.location.href = "/";
-            }
-        } else {
-            const resData = await response.json().catch(() => ({}));
-            errorEl.innerText = resData.message || 'Sign in failed';
-            errorEl.style.display = 'block';
-        }
-    } catch (err) {
-        errorEl.innerText = 'Network error';
-        errorEl.style.display = 'block';
-    }
-});
-</script>
-</body>
-</html>`
+var loginTpl = template.Must(template.ParseFS(templates.FS, "login.html"))
 
 func isValidRedirect(redirect string) bool {
 	if redirect == "" {
@@ -135,7 +76,7 @@ func (h *UserHandler) Login(c *gin.Context) {
 
 	tokenPair, sid, err := h.srv.Login(ctx, params)
 	if err != nil {
-		response.Custom(c.Writer, http.StatusOK, err.Error())
+		response.BadRequest(c.Writer, err.Error())
 		return
 	}
 
@@ -155,16 +96,19 @@ func (h *UserHandler) Profile(c *gin.Context) {
 		response.Custom(c.Writer, http.StatusOK, "missing uuid")
 		return
 	}
-
 	userUUID, ok := uuidVal.(uuid.UUID)
 	if !ok {
 		response.Custom(c.Writer, http.StatusOK, "invalid uuid type")
 		return
 	}
 
+	rolesVal, _ := c.Get(consts.MiddlewareRoles)
+	roles, _ := rolesVal.([]string)
+
 	response.OkData(c.Writer, &resp.UserProfile{
 		UserID:   userID,
 		UserUUID: userUUID,
+		Roles:    roles,
 	})
 }
 
@@ -176,15 +120,15 @@ func (h *UserHandler) Refresh(c *gin.Context) {
 		return
 	}
 
-	param := req.UserRefresh{
+	body := req.UserRefresh{
 		Token:       refreshToken,
 		RequestMeta: req.GetRequestMeta(c.Request),
 	}
 
 	ctx := c.Request.Context()
-	tokenPair, err := h.srv.Refresh(ctx, param)
+	tokenPair, err := h.srv.Refresh(ctx, body)
 	if err != nil {
-		response.Custom(c.Writer, http.StatusOK, err.Error())
+		response.BadRequest(c.Writer, err.Error())
 		return
 	}
 
@@ -222,7 +166,7 @@ func (h *UserHandler) Logout(c *gin.Context) {
 
 	ctx := c.Request.Context()
 	if err := h.srv.Logout(ctx, sessionID, iamSID); err != nil {
-		response.Custom(c.Writer, http.StatusOK, err.Error())
+		response.BadRequest(c.Writer, err.Error())
 		return
 	}
 
@@ -242,7 +186,7 @@ func (h *UserHandler) List(c *gin.Context) {
 	ctx := c.Request.Context()
 	content, count, err := h.srv.List(ctx, params)
 	if err != nil {
-		response.Custom(c.Writer, http.StatusOK, err.Error())
+		response.BadRequest(c.Writer, err.Error())
 		return
 	}
 
@@ -262,7 +206,7 @@ func (h *UserHandler) Info(c *gin.Context) {
 	ctx := c.Request.Context()
 	info, err := h.srv.Info(ctx, params)
 	if err != nil {
-		response.Custom(c.Writer, http.StatusOK, err.Error())
+		response.BadRequest(c.Writer, err.Error())
 		return
 	}
 
@@ -278,7 +222,7 @@ func (h *UserHandler) Create(c *gin.Context) {
 
 	ctx := c.Request.Context()
 	if err := h.srv.Create(ctx, params); err != nil {
-		response.Custom(c.Writer, http.StatusOK, err.Error())
+		response.BadRequest(c.Writer, err.Error())
 		return
 	}
 
@@ -300,7 +244,7 @@ func (h *UserHandler) Update(c *gin.Context) {
 
 	ctx := c.Request.Context()
 	if err := h.srv.Update(ctx, params, body); err != nil {
-		response.Custom(c.Writer, http.StatusOK, err.Error())
+		response.BadRequest(c.Writer, err.Error())
 		return
 	}
 
@@ -316,7 +260,7 @@ func (h *UserHandler) Delete(c *gin.Context) {
 
 	ctx := c.Request.Context()
 	if err := h.srv.Delete(ctx, params); err != nil {
-		response.Custom(c.Writer, http.StatusOK, err.Error())
+		response.BadRequest(c.Writer, err.Error())
 		return
 	}
 

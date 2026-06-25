@@ -5,6 +5,7 @@ import (
 	"entgo.io/ent/dialect/entsql"
 	"entgo.io/ent/schema"
 	"entgo.io/ent/schema/field"
+	"entgo.io/ent/schema/index"
 	"github.com/erewhile/iam/internal/ent/mixin"
 	"github.com/erewhile/iam/internal/model"
 	"github.com/google/uuid"
@@ -38,6 +39,10 @@ func (Token) Fields() []ent.Field {
 
 		field.UUID("session_id", uuid.UUID{}),
 
+		field.Int("application_id").
+			Optional().
+			Nillable(),
+
 		field.Uint8("type").
 			GoType(model.TokenType(0)).
 			Default(uint8(model.TokenTypeAccess)),
@@ -68,6 +73,12 @@ func (Token) Fields() []ent.Field {
 func (Token) Mixin() []ent.Mixin {
 	return []ent.Mixin{
 		mixin.DatetimeMixin{},
+	}
+}
+
+func (Token) Indexes() []ent.Index {
+	return []ent.Index{
+		index.Fields("application_id", "revoked_at"),
 	}
 }
 

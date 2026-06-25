@@ -101,15 +101,28 @@ type CORS struct {
 	MaxAge           time.Duration `json:"max_age"`
 }
 
+type LoginSecurity struct {
+	MaxAttempts     int           `mapstructure:"max_attempts"`
+	AttemptWindow   time.Duration `mapstructure:"attempt_window"`
+	LockoutDuration time.Duration `mapstructure:"lockout_duration"`
+	MaxAttemptsByIP int           `mapstructure:"max_attempts_by_ip"`
+}
+
+type Hash struct {
+	HMACKey string `json:"hmac_key"`
+}
+
 type Config struct {
-	Scheme   Scheme   `json:"scheme"`
-	Database Database `json:"database"`
-	Token    Token    `json:"token"`
-	Session  Session  `json:"session"`
-	Aes      Aes      `json:"aes"`
-	Redis    Redis    `json:"redis"`
-	Logger   Logger   `json:"logger"`
-	CORS     CORS     `json:"cors"`
+	Scheme        Scheme        `json:"scheme"`
+	Database      Database      `json:"database"`
+	Token         Token         `json:"token"`
+	Session       Session       `json:"session"`
+	Aes           Aes           `json:"aes"`
+	Redis         Redis         `json:"redis"`
+	Logger        Logger        `json:"logger"`
+	CORS          CORS          `json:"cors"`
+	LoginSecurity LoginSecurity `json:"login_security"`
+	Hash          Hash          `json:"hash"`
 }
 
 var (
@@ -126,7 +139,7 @@ func defaultConfig() *Config {
 	logsDir := filepath.Join(flags.Data, "logs")
 
 	mustGenKey := func() string {
-		if s, err := utils.RandomCryptoToken(32); err == nil {
+		if s, err := utils.RandomAlphanumeric(32); err == nil {
 			return s
 		}
 
@@ -188,6 +201,15 @@ func defaultConfig() *Config {
 			AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization"},
 			AllowCredentials: true,
 			MaxAge:           8 * time.Hour,
+		},
+		LoginSecurity: LoginSecurity{
+			MaxAttempts:     5,
+			AttemptWindow:   10 * time.Minute,
+			LockoutDuration: 15 * time.Minute,
+			MaxAttemptsByIP: 20,
+		},
+		Hash: Hash{
+			HMACKey: mustGenKey(),
 		},
 	}
 }

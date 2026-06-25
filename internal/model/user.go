@@ -8,6 +8,11 @@ const (
 	UserStatusDisabled
 )
 
+const (
+	UserSystem   = true
+	UserStandard = false
+)
+
 func (s UserStatus) String() string {
 	switch s {
 	case UserStatusPending:

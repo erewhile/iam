@@ -7,6 +7,7 @@ import (
 
 	"github.com/erewhile/iam/config"
 	"github.com/erewhile/iam/internal/cache/rds"
+	"github.com/erewhile/iam/internal/consts"
 	"github.com/erewhile/iam/internal/dto/req"
 	"github.com/erewhile/iam/internal/dto/resp"
 	"github.com/erewhile/iam/internal/ent/db"
@@ -23,31 +24,51 @@ import (
 type UserService struct {
 	repo         repository.UserRepository
 	token        repository.TokenRepository
+	roleRepo     repository.RoleRepository
 	transactor   *repository.Transactor
 	tokenCache   rds.TokenCache
 	sessionCache rds.IAMSessionCache
+	loginAttempt rds.LoginAttemptCache
 }
 
 func NewUserService(
 	repo repository.UserRepository,
 	token repository.TokenRepository,
+	roleRepo repository.RoleRepository,
 	transactor *repository.Transactor,
 	tokenCache rds.TokenCache,
 	sessionCache rds.IAMSessionCache,
+	loginAttempt rds.LoginAttemptCache,
 ) *UserService {
 	return &UserService{
 		repo:         repo,
 		token:        token,
+		roleRepo:     roleRepo,
 		transactor:   transactor,
 		tokenCache:   tokenCache,
 		sessionCache: sessionCache,
+		loginAttempt: loginAttempt,
 	}
 }
 
 func (s *UserService) Login(ctx context.Context, body req.UserLogin) (*token.TokenPair, string, error) {
+	sec := config.Get().LoginSecurity
+	ip := body.RequestMeta.IP
+
+	locked, ttl, err := s.loginAttempt.IsLocked(ctx, body.Username)
+	if err != nil {
+		logger.Error("check login lock failed", err)
+		return nil, "", errors.New("login failed, please try again later")
+	}
+	if locked {
+		accountLocked := errors.New("account is temporarily locked due to too many failed login attempts")
+		return nil, "", fmt.Errorf("%w: try again in %d seconds", accountLocked, int(ttl.Seconds()))
+	}
+
 	userInfo, err := s.repo.GetByUsername(ctx, body.Username)
 	if err != nil {
 		if db.IsNotFound(err) {
+			s.recordFailure(ctx, body.Username, ip, sec)
 			return nil, "", errors.New("user not found")
 		}
 		logger.Error("login failed", err)
@@ -64,11 +85,28 @@ func (s *UserService) Login(ctx context.Context, body req.UserLogin) (*token.Tok
 		return nil, "", errors.New("password check failed, please try again later")
 	}
 	if !ok {
+		s.recordFailure(ctx, body.Username, ip, sec)
 		return nil, "", errors.New("wrong password")
 	}
 
+	_ = s.loginAttempt.ResetFailure(ctx, body.Username)
+	_ = s.loginAttempt.ResetFailureByIP(ctx, ip)
+
+	roleCodes, err := s.getUserRoleCodes(ctx, userInfo.ID)
+	if err != nil {
+		logger.Error("get user roles failed", err)
+		return nil, "", errors.New("login failed")
+	}
+
 	sessionID := uuid.New()
-	tokenPair, err := s.issueTokenPair(ctx, userInfo.ID, userInfo.UUID, sessionID, body.RequestMeta)
+	userPayload := token.UserPayload{
+		UserID:        userInfo.ID,
+		UserUUID:      userInfo.UUID,
+		ApplicationID: nil,
+		Roles:         roleCodes,
+	}
+
+	tokenPair, err := s.issueTokenPair(ctx, userPayload, sessionID, body.RequestMeta)
 	if err != nil {
 		return nil, "", err
 	}
@@ -82,15 +120,49 @@ func (s *UserService) Login(ctx context.Context, body req.UserLogin) (*token.Tok
 	return tokenPair, sid, nil
 }
 
-func (s *UserService) LoginWithOAuthCode(ctx context.Context, payload *rds.OAuthCodePayload, meta req.RequestMeta) (*token.TokenPair, error) {
-	return s.issueTokenPair(ctx, payload.UserID, payload.UserUUID, payload.SessionID, meta)
+func (s *UserService) recordFailure(ctx context.Context, username, ip string, sec config.LoginSecurity) {
+	count, err := s.loginAttempt.IncrFailure(ctx, username, sec.AttemptWindow)
+	if err != nil {
+		logger.Error("incr login failure failed", err)
+		return
+	}
+	if count >= int64(sec.MaxAttempts) {
+		if err := s.loginAttempt.Lock(ctx, username, sec.LockoutDuration); err != nil {
+			logger.Error("lock account failed", err)
+		}
+		_ = s.loginAttempt.ResetFailure(ctx, username)
+	}
+
+	if ip != "" {
+		_, err := s.loginAttempt.IncrFailureByIP(ctx, ip, sec.AttemptWindow)
+		if err != nil {
+			logger.Error("incr login failure by ip failed", err)
+		}
+	}
+}
+
+func (s *UserService) LoginWithOAuthCode(ctx context.Context, payload *rds.OAuthCodePayload, applicationID int, meta req.RequestMeta) (*token.TokenPair, error) {
+	roleCodes, err := s.getUserRoleCodes(ctx, payload.UserID)
+	if err != nil {
+		logger.Error("get user roles failed", err)
+		return nil, errors.New("issue token failed")
+	}
+
+	userPayload := token.UserPayload{
+		UserID:        payload.UserID,
+		UserUUID:      payload.UserUUID,
+		ApplicationID: &applicationID,
+		Roles:         roleCodes,
+	}
+	return s.issueTokenPair(ctx, userPayload, payload.SessionID, meta)
 }
 
 func (s *UserService) Profile(ctx context.Context, userID int) {}
 
-func (s *UserService) Refresh(ctx context.Context, params req.UserRefresh) (*token.TokenPair, error) {
+func (s *UserService) Refresh(ctx context.Context, body req.UserRefresh) (*token.TokenPair, error) {
 	claims, payload, err := token.Validate(
-		params.Token,
+		body.Token,
+		body.RequestMeta,
 		[]byte(config.Get().Token.Aad),
 		token.TokenTypeRefresh,
 	)
@@ -103,7 +175,7 @@ func (s *UserService) Refresh(ctx context.Context, params req.UserRefresh) (*tok
 		return nil, errors.New("refresh token expired")
 	}
 
-	tokenHashed := hash.HashBlake2b256([]byte(params.Token))
+	tokenHashed := hash.HashBlake2b256([]byte(body.Token))
 	if !s.isTokenValid(ctx, tokenHashed, model.TokenTypeRefresh) {
 		s.invalidateToken(ctx, claims.SessionID)
 		return nil, errors.New("refresh token revoked or not found")
@@ -124,6 +196,12 @@ func (s *UserService) Refresh(ctx context.Context, params req.UserRefresh) (*tok
 		return nil, errors.New("account is not active")
 	}
 
+	roleCodes, err := s.getUserRoleCodes(ctx, payload.UserID)
+	if err != nil {
+		logger.Error("get user roles failed", err)
+		return nil, errors.New("refresh failed")
+	}
+
 	if err := s.token.RevokeBySession(ctx, claims.SessionID); err != nil {
 		logger.Error("revoke failed", err)
 		return nil, errors.New("revoke failed")
@@ -132,7 +210,13 @@ func (s *UserService) Refresh(ctx context.Context, params req.UserRefresh) (*tok
 	s.invalidateToken(ctx, claims.SessionID)
 
 	newSessionID := uuid.New()
-	return s.issueTokenPair(ctx, payload.UserID, payload.UserUUID, newSessionID, params.RequestMeta)
+	userPayload := token.UserPayload{
+		UserID:        payload.UserID,
+		UserUUID:      payload.UserUUID,
+		ApplicationID: payload.ApplicationID,
+		Roles:         roleCodes,
+	}
+	return s.issueTokenPair(ctx, userPayload, newSessionID, body.RequestMeta)
 }
 
 func (s *UserService) Logout(ctx context.Context, sessionID uuid.UUID, iamSID string) error {
@@ -153,15 +237,14 @@ func (s *UserService) Logout(ctx context.Context, sessionID uuid.UUID, iamSID st
 
 func (s *UserService) issueTokenPair(
 	ctx context.Context,
-	userID int,
-	userUUID uuid.UUID,
+	userPayload token.UserPayload,
 	sessionID uuid.UUID,
 	meta req.RequestMeta,
 ) (*token.TokenPair, error) {
 	tokenPair, err := token.Generate(
-		userID,
-		userUUID,
+		userPayload,
 		sessionID,
+		meta,
 		[]byte(config.Get().Token.Aad),
 	)
 	if err != nil {
@@ -178,7 +261,7 @@ func (s *UserService) issueTokenPair(
 		txTokenRepo := repository.NewTokenRepository(txClient)
 
 		if err := txTokenRepo.Create(ctx, req.TokenCreate{
-			UserID:    userID,
+			UserID:    userPayload.UserID,
 			Jti:       accessJti,
 			SessionID: sessionID,
 			Type:      model.TokenTypeAccess,
@@ -191,7 +274,7 @@ func (s *UserService) issueTokenPair(
 		}
 
 		return txTokenRepo.Create(ctx, req.TokenCreate{
-			UserID:    userID,
+			UserID:    userPayload.UserID,
 			Jti:       refreshJti,
 			SessionID: sessionID,
 			Type:      model.TokenTypeRefresh,
@@ -224,6 +307,18 @@ func (s *UserService) invalidateToken(ctx context.Context, sessionID uuid.UUID) 
 	if err := s.tokenCache.DelRefresh(ctx, sessionID); err != nil {
 		logger.Error("del refresh cache failed", err)
 	}
+}
+
+func (s *UserService) getUserRoleCodes(ctx context.Context, userID int) ([]string, error) {
+	roles, err := s.roleRepo.ListByUserID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	codes := make([]string, 0, len(roles))
+	for _, r := range roles {
+		codes = append(codes, r.Code)
+	}
+	return codes, nil
 }
 
 func (s *UserService) StartSession(ctx context.Context, userID int, userUUID uuid.UUID) (string, error) {
@@ -329,7 +424,7 @@ func (s *UserService) Create(ctx context.Context, body req.UserCreate) error {
 		return errors.New("failed to hash password")
 	}
 
-	_, err = s.repo.Create(ctx, body, hashed)
+	_, err = s.repo.Create(ctx, body, hashed, model.UserStandard)
 	if err != nil {
 		logger.Error("failed to create user", err)
 		return errors.New("failed to create user")
@@ -347,13 +442,19 @@ func (s *UserService) Update(ctx context.Context, params req.UserUpdatePathParam
 		return errors.New("password must be at least 6 characters long")
 	}
 
-	_, err := s.repo.GetByID(ctx, params.UserID)
+	userInfo, err := s.repo.GetByID(ctx, params.UserID)
 	if err != nil {
 		if db.IsNotFound(err) {
 			return errors.New("user not found")
 		}
 		logger.Error("get user failed", err)
 		return errors.New("failed to get user info")
+	}
+
+	if body.Status == model.UserStatusDisabled && userInfo.Status == model.UserStatusActive {
+		if err := s.ensureNotLastAdmin(ctx, userInfo.ID); err != nil {
+			return err
+		}
 	}
 
 	exists, err := s.repo.Duplicate(ctx, body.Username, body.Email, params.UserID)
@@ -388,19 +489,44 @@ func (s *UserService) Update(ctx context.Context, params req.UserUpdatePathParam
 }
 
 func (s *UserService) Delete(ctx context.Context, params req.DeletePathParams) error {
-	_, err := s.repo.GetByID(ctx, params.ID)
+	userInfo, err := s.repo.GetByID(ctx, params.ID)
 	if err != nil {
 		if db.IsNotFound(err) {
 			return errors.New("user not found")
-
 		}
 		logger.Error("get user failed", err)
 		return errors.New("failed to get user info")
 	}
 
+	if userInfo.IsSystem {
+		return errors.New("the system cannot delete")
+	}
+
+	if err := s.ensureNotLastAdmin(ctx, userInfo.ID); err != nil {
+		return err
+	}
+
 	if err := s.repo.Delete(ctx, params); err != nil {
 		logger.Error("failed to delete user", err)
 		return errors.New("failed to delete user")
+	}
+	return nil
+}
+
+func (s *UserService) ensureNotLastAdmin(ctx context.Context, userID int) error {
+	isAdmin, err := s.roleRepo.UserHasRole(ctx, userID, consts.RoleSuperAdmin)
+	if err != nil {
+		return errors.New("failed to verify user role")
+	}
+	if !isAdmin {
+		return nil
+	}
+	count, err := s.roleRepo.CountUsersByRoleCode(ctx, consts.RoleSuperAdmin)
+	if err != nil {
+		return errors.New("failed to verify admin count")
+	}
+	if count <= 1 {
+		return errors.New("cannot delete or disable the last admin account")
 	}
 	return nil
 }

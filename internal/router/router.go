@@ -43,40 +43,38 @@ func Init(e *gin.Engine) {
 	users := protected.Group("/users")
 	{
 		users.GET("/me", app.User.Profile)
-
-		users.GET("", app.User.List)
-		users.GET("/:id", app.User.Info)
-		users.POST("", app.User.Create)
-		users.PUT("/:id", app.User.Update)
-		users.DELETE("/:id", app.User.Delete)
-
-		users.GET("/:id/roles", app.UserRole.Roles)
-		users.PUT("/:id/roles", app.UserRole.Assign)
 	}
 
-	tokens := protected.Group("/tokens")
+	admin := protected.Group("")
+	admin.Use(middleware.RequireRoles(consts.RoleSuperAdmin))
 	{
-		tokens.GET("", app.Token.List)
-		tokens.GET("/:id", app.Token.Info)
-		tokens.DELETE("/:id", app.Token.Revoke)
-	}
+		adminUsers := admin.Group("/users")
+		adminUsers.GET("", app.User.List)
+		adminUsers.GET("/:id", app.User.Info)
+		adminUsers.POST("", app.User.Create)
+		adminUsers.PUT("/:id", app.User.Update)
+		adminUsers.DELETE("/:id", app.User.Delete)
+		adminUsers.GET("/:id/roles", app.UserRole.Roles)
+		adminUsers.PUT("/:id/roles", app.UserRole.Assign)
 
-	roles := protected.Group("/roles")
-	{
-		roles.GET("", app.Role.List)
-		roles.GET("/:id", app.Role.Info)
-		roles.POST("", app.Role.Create)
-		roles.PUT("/:id", app.Role.Update)
-		roles.DELETE("/:id", app.Role.Delete)
-	}
+		admin.Group("/tokens").
+			GET("", app.Token.List)
+		admin.GET("/tokens/:id", app.Token.Info)
+		admin.DELETE("/tokens/:id", app.Token.Revoke)
 
-	applications := protected.Group("/applications")
-	{
-		applications.GET("", app.Application.List)
-		applications.GET("/:id", app.Application.Info)
-		applications.POST("", app.Application.Create)
-		applications.PUT("/:id", app.Application.Update)
-		applications.DELETE("/:id", app.Application.Delete)
+		adminRoles := admin.Group("/roles")
+		adminRoles.GET("", app.Role.List)
+		adminRoles.GET("/:id", app.Role.Info)
+		adminRoles.POST("", app.Role.Create)
+		adminRoles.PUT("/:id", app.Role.Update)
+		adminRoles.DELETE("/:id", app.Role.Delete)
+
+		adminApps := admin.Group("/applications")
+		adminApps.GET("", app.Application.List)
+		adminApps.GET("/:id", app.Application.Info)
+		adminApps.POST("", app.Application.Create)
+		adminApps.PUT("/:id", app.Application.Update)
+		adminApps.DELETE("/:id", app.Application.Delete)
 	}
 
 	e.NoRoute(func(c *gin.Context) {

@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/erewhile/iam/config"
+	"github.com/erewhile/iam/internal/dto/req"
 	"github.com/erewhile/iam/pkg/aes"
 	"github.com/google/uuid"
 )
@@ -15,15 +16,16 @@ func TestEncryptedToken(t *testing.T) {
 	userID := 621
 	userUUID := uuid.New()
 	myAAD := []byte("iam_token_v1")
+	meta := req.RequestMeta{IP: "127.0.0.1", UserAgent: "go-client"}
 
-	tokenPair, err := Generate(userID, userUUID, uuid.Nil, myAAD)
+	tokenPair, err := Generate(UserPayload{UserID: userID, UserUUID: userUUID}, uuid.Nil, meta, myAAD)
 	if err != nil {
 		t.Fatalf("bummer! failed to mint token: %v", err)
 	}
 
 	t.Logf("here is your access token: %s", tokenPair.AccessToken)
 
-	claims, payload, err := Validate(tokenPair.AccessToken, myAAD, TokenTypeAccess)
+	claims, payload, err := Validate(tokenPair.AccessToken, meta, myAAD, TokenTypeAccess)
 	if err != nil {
 		t.Fatalf("nope! token validation went sideways: %v", err)
 	}

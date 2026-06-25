@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/subtle"
 	"errors"
+	"slices"
 
 	"github.com/erewhile/iam/internal/ent/db"
 	"github.com/erewhile/iam/internal/repository"
@@ -33,7 +34,7 @@ func (s *OAuthService) ValidateAuthorize(ctx context.Context, clientID, redirect
 		return nil, err
 	}
 
-	if !isRedirectURIAllowed(app.RedirectUris, redirectURI) {
+	if !slices.Contains(app.RedirectUris, redirectURI) {
 		return nil, ErrRedirectURIInvalid
 	}
 
@@ -55,13 +56,4 @@ func (s *OAuthService) ValidateClient(ctx context.Context, clientID, clientSecre
 	}
 
 	return app, nil
-}
-
-func isRedirectURIAllowed(registered []string, target string) bool {
-	for _, uri := range registered {
-		if uri == target {
-			return true
-		}
-	}
-	return false
 }

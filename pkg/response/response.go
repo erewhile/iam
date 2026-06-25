@@ -39,7 +39,7 @@ func OkData[T any](w http.ResponseWriter, data T) {
 }
 
 func Fail(w http.ResponseWriter, errCode code.Code) {
-	write(w, http.StatusOK, response[any]{
+	write(w, http.StatusBadRequest, response[any]{
 		Code:    errCode,
 		Status:  false,
 		Message: errCode.Message(),
@@ -48,7 +48,7 @@ func Fail(w http.ResponseWriter, errCode code.Code) {
 }
 
 func FailMessage(w http.ResponseWriter, errCode code.Code, message string) {
-	write(w, http.StatusOK, response[any]{
+	write(w, http.StatusBadRequest, response[any]{
 		Code:    errCode,
 		Status:  false,
 		Message: message,

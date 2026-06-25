@@ -54,6 +54,6 @@ func (UserRole) Edges() []ent.Edge {
 func (UserRole) Indexes() []ent.Index {
 	return []ent.Index{
 		index.Fields("user_id", "role_id").Unique(),
-		index.Fields("role_id", "user_id"),
+		index.Fields("role_id"),
 	}
 }

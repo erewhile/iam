@@ -13,14 +13,15 @@ type TokenList struct {
 }
 
 type TokenCreate struct {
-	UserID    int
-	Jti       uuid.UUID
-	SessionID uuid.UUID
-	Type      model.TokenType
-	TokenHash []byte
-	IP        string
-	UserAgent string
-	ExpiresAt time.Time
+	UserID        int
+	Jti           uuid.UUID
+	SessionID     uuid.UUID
+	ApplicationID *int
+	Type          model.TokenType
+	TokenHash     []byte
+	IP            string
+	UserAgent     string
+	ExpiresAt     time.Time
 }
 
 type TokenRevokePathParams struct {

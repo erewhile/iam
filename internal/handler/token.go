@@ -1,8 +1,6 @@
 package handler
 
 import (
-	"net/http"
-
 	"github.com/erewhile/iam/internal/dto/req"
 	"github.com/erewhile/iam/internal/dto/resp"
 	"github.com/erewhile/iam/internal/service"
@@ -29,7 +27,7 @@ func (h *TokenHandler) List(c *gin.Context) {
 	ctx := c.Request.Context()
 	content, count, err := h.srv.List(ctx, params)
 	if err != nil {
-		response.Custom(c.Writer, http.StatusOK, err.Error())
+		response.BadRequest(c.Writer, err.Error())
 		return
 	}
 
@@ -49,7 +47,7 @@ func (h *TokenHandler) Info(c *gin.Context) {
 	ctx := c.Request.Context()
 	info, err := h.srv.Info(ctx, params)
 	if err != nil {
-		response.Custom(c.Writer, http.StatusOK, err.Error())
+		response.BadRequest(c.Writer, err.Error())
 		return
 	}
 
@@ -65,7 +63,7 @@ func (h *TokenHandler) Revoke(c *gin.Context) {
 
 	ctx := c.Request.Context()
 	if err := h.srv.Revoke(ctx, params); err != nil {
-		response.Custom(c.Writer, http.StatusOK, err.Error())
+		response.BadRequest(c.Writer, err.Error())
 		return
 	}
 

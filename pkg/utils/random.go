@@ -4,29 +4,45 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"fmt"
+	"math/big"
 )
 
 func RandomString(n int) (string, error) {
+	if n <= 0 {
+		return "", fmt.Errorf("n must be positive")
+	}
 	b := make([]byte, n)
-	_, err := rand.Read(b)
-	if err != nil {
+	if _, err := rand.Read(b); err != nil {
 		return "", fmt.Errorf("failed to generate random bytes: %w", err)
 	}
 	return base64.RawURLEncoding.EncodeToString(b), nil
 }
 
-func RandomCryptoToken(n int) (string, error) {
-	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ01233456789-_"
+const (
+	alphanumericCharset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	unambiguousCharset  = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+)
 
-	bytes := make([]byte, n)
-	_, err := rand.Read(bytes)
-	if err != nil {
-		return "", fmt.Errorf("failed to generate crypto tokens: %w", err)
+func RandomAlphanumeric(length int) (string, error) {
+	return randomFromCharset(length, alphanumericCharset)
+}
+
+func RandomUnambiguous(length int) (string, error) {
+	return randomFromCharset(length, unambiguousCharset)
+}
+
+func randomFromCharset(length int, charset string) (string, error) {
+	if length <= 0 {
+		return "", fmt.Errorf("length must be positive")
 	}
-
-	for i, b := range bytes {
-		bytes[i] = charset[b%64]
+	charsetLen := big.NewInt(int64(len(charset)))
+	result := make([]byte, length)
+	for i := range result {
+		idx, err := rand.Int(rand.Reader, charsetLen)
+		if err != nil {
+			return "", fmt.Errorf("failed to generate random char: %w", err)
+		}
+		result[i] = charset[idx.Int64()]
 	}
-
-	return string(bytes), nil
+	return string(result), nil
 }

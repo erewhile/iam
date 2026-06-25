@@ -11,5 +11,14 @@ type ApplicationInfo struct {
 	ID           int      `json:"id"`
 	Name         string   `json:"name"`
 	ClientID     string   `json:"client_id"`
+	ClientSecret string   `json:"client_secret"`
+	RedirectUris []string `json:"redirect_uris"`
+}
+
+type ApplicationSave struct {
+	ID           int      `json:"id"`
+	Name         string   `json:"name"`
+	ClientID     string   `json:"client_id"`
+	ClietnSecret string   `json:"clietn_secret"`
 	RedirectUris []string `json:"redirect_uris"`
 }

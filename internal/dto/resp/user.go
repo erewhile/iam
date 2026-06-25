@@ -7,6 +7,7 @@ import (
 type UserProfile struct {
 	UserID   int       `json:"user_id"`
 	UserUUID uuid.UUID `json:"user_uuid"`
+	Roles    []string  `json:"roles,omitempty"`
 }
 
 type UserListItem struct {

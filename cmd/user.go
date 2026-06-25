@@ -45,7 +45,7 @@ func runUserAdd(cmd *cobra.Command, args []string) error {
 	}
 	defer database.Close()
 
-	passwordStr, err := randomPassword(16)
+	passwordStr, err := randomPassword(8)
 	if err != nil {
 		return fmt.Errorf("failed to generate random password: %w", err)
 	}
@@ -63,7 +63,7 @@ func runUserAdd(cmd *cobra.Command, args []string) error {
 		Email:    addUserEmail,
 		Username: addUserUsername,
 		Status:   model.UserStatusActive,
-	}, hashed)
+	}, hashed, model.UserSystem)
 	if err != nil {
 		return fmt.Errorf("failed to create user: %w", err)
 	}

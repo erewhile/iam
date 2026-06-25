@@ -1,8 +1,6 @@
 package handler
 
 import (
-	"net/http"
-
 	"github.com/erewhile/iam/internal/dto/req"
 	"github.com/erewhile/iam/internal/dto/resp"
 	"github.com/erewhile/iam/internal/service"
@@ -29,7 +27,7 @@ func (h *ApplicationHandler) List(c *gin.Context) {
 	ctx := c.Request.Context()
 	content, count, err := h.srv.List(ctx, params)
 	if err != nil {
-		response.Custom(c.Writer, http.StatusOK, err.Error())
+		response.BadRequest(c.Writer, err.Error())
 		return
 	}
 
@@ -49,7 +47,7 @@ func (h *ApplicationHandler) Info(c *gin.Context) {
 	ctx := c.Request.Context()
 	info, err := h.srv.Info(ctx, params)
 	if err != nil {
-		response.Custom(c.Writer, http.StatusOK, err.Error())
+		response.BadRequest(c.Writer, err.Error())
 		return
 	}
 
@@ -64,12 +62,13 @@ func (h *ApplicationHandler) Create(c *gin.Context) {
 	}
 
 	ctx := c.Request.Context()
-	if err := h.srv.Create(ctx, body); err != nil {
-		response.Custom(c.Writer, http.StatusOK, err.Error())
+	res, err := h.srv.Create(ctx, body)
+	if err != nil {
+		response.BadRequest(c.Writer, err.Error())
 		return
 	}
 
-	response.OK(c.Writer)
+	response.OkData(c.Writer, res)
 }
 
 func (h *ApplicationHandler) Update(c *gin.Context) {
@@ -86,12 +85,13 @@ func (h *ApplicationHandler) Update(c *gin.Context) {
 	}
 
 	ctx := c.Request.Context()
-	if err := h.srv.Update(ctx, params, body); err != nil {
-		response.Custom(c.Writer, http.StatusOK, err.Error())
+	res, err := h.srv.Update(ctx, params, body)
+	if err != nil {
+		response.BadRequest(c.Writer, err.Error())
 		return
 	}
 
-	response.OK(c.Writer)
+	response.OkData(c.Writer, res)
 }
 
 func (h *ApplicationHandler) Delete(c *gin.Context) {
@@ -103,7 +103,7 @@ func (h *ApplicationHandler) Delete(c *gin.Context) {
 
 	ctx := c.Request.Context()
 	if err := h.srv.Delete(ctx, params); err != nil {
-		response.Custom(c.Writer, http.StatusOK, err.Error())
+		response.BadRequest(c.Writer, err.Error())
 		return
 	}
 

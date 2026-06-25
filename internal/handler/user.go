@@ -2,8 +2,6 @@ package handler
 
 import (
 	"net/http"
-	"net/url"
-	"strings"
 	"text/template"
 
 	"github.com/erewhile/iam/cmd/flags"
@@ -31,32 +29,29 @@ func NewUserHandler(srv *service.UserService) *UserHandler {
 
 var loginTpl = template.Must(template.ParseFS(templates.FS, "login.html"))
 
-func isValidRedirect(redirect string) bool {
-	if redirect == "" {
-		return false
-	}
-	if strings.HasPrefix(redirect, "//") {
-		return false
-	}
-	u, err := url.Parse(redirect)
-	if err != nil || u.IsAbs() {
-		return false
-	}
-	return strings.HasPrefix(u.Path, consts.OAuthAuthorizePath)
-}
-
 func (h *UserHandler) ShowLogin(c *gin.Context) {
-	redirect := c.Query("redirect")
+	var params req.UserShowLogin
+	if err := c.ShouldBindQuery(&params); err != nil {
+		response.Fail(c.Writer, code.Parameter)
+		return
+	}
 
-	if !isValidRedirect(redirect) {
-		redirect = ""
+	finalRedirect, err := h.srv.ValidateRedirect(c.Request.Context(), params.ClientID, params.Redirect)
+	if err != nil {
+		logger.Error("validate redirect failed", err)
+		finalRedirect = ""
+	}
+
+	if params.Redirect != "" && finalRedirect == "" {
+		logger.Warn("Redirect URL was blocked or invalid", "client_id", params.ClientID, "input", params.Redirect)
 	}
 
 	c.Header("Content-Type", "text/html; charset=utf-8")
 	c.Writer.WriteHeader(http.StatusOK)
 
-	err := loginTpl.Execute(c.Writer, gin.H{
-		"Redirect":    redirect,
+	err = loginTpl.Execute(c.Writer, gin.H{
+		"Redirect":    finalRedirect,
+		"ClientID":    params.ClientID,
 		"LoginApiUrl": consts.AuthLoginPath,
 	})
 	if err != nil {

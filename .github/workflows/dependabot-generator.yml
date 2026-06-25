@@ -1,0 +1,54 @@
+name: Dependabot Auto Generator
+
+on:
+  schedule:
+    - cron: '0 0 1 * *'
+  workflow_dispatch:
+
+jobs:
+  update-deps:
+    runs-on: ubuntu-latest
+    
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+          cache: true
+
+      - name: Install Tools (ent & wire)
+        run: |
+          go install entgo.io/ent/cmd/ent@latest
+          go install github.com/google/wire/cmd/wire@latest
+
+      - name: Update Go Dependencies
+        run: |
+          go get -u ./...
+          go mod tidy
+
+      - name: Generate Code (Ent & Wire)
+        run: |
+          go generate ./internal/ent/...
+          $(go env GOPATH)/bin/wire ./internal/wire/...
+          go mod tidy
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "mod: update dependencies and regenerate codes"
+          title: "mod: automated go dependency updates"
+          body: |
+            This is an automated monthly PR to keep Go dependencies, `ent` schemas, and `wire` injections up to date.
+            
+            Please review the micro-version bumps and overlapping generated code.
+          branch: "automation/dependabot-style-updates"
+          labels: "dependencies"
+          delete-branch: true

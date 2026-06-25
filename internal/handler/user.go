@@ -1,7 +1,10 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
+	"net/url"
+	"strings"
 	"text/template"
 
 	"github.com/erewhile/iam/cmd/flags"
@@ -29,6 +32,27 @@ func NewUserHandler(srv *service.UserService) *UserHandler {
 
 var loginTpl = template.Must(template.ParseFS(templates.FS, "login.html"))
 
+func (h *UserHandler) validateRedirect(redirect string) (string, error) {
+	if redirect == "" {
+		return "/", nil
+	}
+
+	inputURL, err := url.Parse(redirect)
+	if err != nil {
+		return "/", nil
+	}
+
+	if inputURL.IsAbs() || inputURL.Host != "" {
+		return "", errors.New("prohibited external redirect")
+	}
+
+	if !strings.HasPrefix(redirect, "/") {
+		return "/", nil
+	}
+
+	return redirect, nil
+}
+
 func (h *UserHandler) ShowLogin(c *gin.Context) {
 	var params req.UserShowLogin
 	if err := c.ShouldBindQuery(&params); err != nil {
@@ -36,14 +60,14 @@ func (h *UserHandler) ShowLogin(c *gin.Context) {
 		return
 	}
 
-	finalRedirect, err := h.srv.ValidateRedirect(c.Request.Context(), params.ClientID, params.Redirect)
+	finalRedirect, err := h.validateRedirect(params.Redirect)
 	if err != nil {
 		logger.Error("validate redirect failed", err)
 		finalRedirect = ""
 	}
 
 	if params.Redirect != "" && finalRedirect == "" {
-		logger.Warn("Redirect URL was blocked or invalid", "client_id", params.ClientID, "input", params.Redirect)
+		logger.Warn("Redirect URL was blocked or invalid", "input", params.Redirect)
 	}
 
 	c.Header("Content-Type", "text/html; charset=utf-8")
@@ -51,7 +75,6 @@ func (h *UserHandler) ShowLogin(c *gin.Context) {
 
 	err = loginTpl.Execute(c.Writer, gin.H{
 		"Redirect":    finalRedirect,
-		"ClientID":    params.ClientID,
 		"LoginApiUrl": consts.AuthLoginPath,
 	})
 	if err != nil {

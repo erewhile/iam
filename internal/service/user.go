@@ -4,12 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/url"
-	"strings"
 
 	"github.com/erewhile/iam/config"
 	"github.com/erewhile/iam/internal/cache/rds"
-	"github.com/erewhile/iam/internal/consts"
 	"github.com/erewhile/iam/internal/dto/req"
 	"github.com/erewhile/iam/internal/dto/resp"
 	"github.com/erewhile/iam/internal/ent/db"
@@ -56,64 +53,10 @@ func NewUserService(
 	}
 }
 
-func (s *UserService) ValidateRedirect(ctx context.Context, clientID string, redirect string) (string, error) {
-	if clientID != "" {
-		app, err := s.appRepo.GetByClientID(ctx, clientID)
-		if err != nil || app == nil {
-			return "", nil
-		}
-
-		if isValidClientRedirect(app.RedirectUris, redirect) {
-			return redirect, nil
-		}
-		return "", nil
-	}
-
-	if isValidRedirect(redirect) {
-		return redirect, nil
-	}
-
-	return "", nil
-}
-
-func isValidClientRedirect(registeredURIs []string, inputRedirect string) bool {
-	if inputRedirect == "" {
-		return false
-	}
-
-	inputURL, err := url.Parse(inputRedirect)
-	if err != nil {
-		return false
-	}
-
-	for _, rawURI := range registeredURIs {
-		regURL, err := url.Parse(rawURI)
-		if err != nil {
-			continue
-		}
-
-		if inputURL.Scheme == regURL.Scheme &&
-			inputURL.Host == regURL.Host &&
-			strings.HasPrefix(inputURL.Path, regURL.Path) {
-			return true
-		}
-	}
-	return false
-}
-
-func isValidRedirect(redirect string) bool {
-	if redirect == "" {
-		return false
-	}
-	if strings.HasPrefix(redirect, "//") {
-		return false
-	}
-	u, err := url.Parse(redirect)
-	if err != nil || u.IsAbs() {
-		return false
-	}
-	return strings.HasPrefix(u.Path, consts.OAuthAuthorizePath)
-}
+var (
+	ErrInvalidClient   = errors.New("invalid client identifier")
+	ErrInvalidRedirect = errors.New("redirect uri is strictly blocked by security policy")
+)
 
 func (s *UserService) Login(ctx context.Context, body req.UserLogin) (*token.TokenPair, string, error) {
 	sec := config.Get().LoginSecurity

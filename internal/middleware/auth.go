@@ -14,7 +14,7 @@ import (
 )
 
 func Auth() gin.HandlerFunc {
-	tokenCache := rds.NewTokenCache() // 只在中间件初始化时创建一次
+	tokenCache := rds.NewTokenCache()
 
 	return func(c *gin.Context) {
 		cookieUtil := utils.NewCookieUtil(!flags.Debug)

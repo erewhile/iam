@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/erewhile/iam/config"
+	"github.com/erewhile/iam/internal/consts"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -186,4 +187,85 @@ func (r *Redis) Expire(ctx context.Context, key string, ttl time.Duration) error
 		return fmt.Errorf("expire key %s: %w", key, err)
 	}
 	return nil
+}
+
+func (r *Redis) Incr(ctx context.Context, key string) (int64, error) {
+	n, err := r.client.Incr(ctx, r.key(key)).Result()
+	if err != nil {
+		return 0, fmt.Errorf("incr key %s: %w", key, err)
+	}
+	return n, nil
+}
+
+func (r *Redis) IncrBy(ctx context.Context, key string, value int64) (int64, error) {
+	n, err := r.client.IncrBy(ctx, r.key(key), value).Result()
+	if err != nil {
+		return 0, fmt.Errorf("incrby key %s: %w", key, err)
+	}
+	return n, nil
+}
+
+func (r *Redis) TTL(ctx context.Context, key string) (time.Duration, error) {
+	d, err := r.client.TTL(ctx, r.key(key)).Result()
+	if err != nil {
+		return 0, fmt.Errorf("ttl key %s: %w", key, err)
+	}
+	return d, nil
+}
+
+func (r *Redis) CuckooFilterAdd(ctx context.Context, key, item string) error {
+	if err := r.client.Do(ctx, "CF.ADD", r.key(consts.RedisCuckooFilterKeyPrefix+key), item).Err(); err != nil {
+		return fmt.Errorf("cf.add key %s item %s: %w", key, item, err)
+	}
+	return nil
+}
+
+func (r *Redis) CuckooFilterExists(ctx context.Context, key, item string) (bool, error) {
+	res, err := r.client.Do(ctx, "CF.EXISTS", r.key(consts.RedisCuckooFilterKeyPrefix+key), item).Result()
+	if err != nil {
+		return false, fmt.Errorf("cf.exists key %s item %s: %w", key, item, err)
+	}
+	n, ok := res.(int64)
+	if !ok {
+		return false, fmt.Errorf("unexpected cf.exists result type for key %s", key)
+	}
+	return n == 1, nil
+}
+
+func (r *Redis) CuckooFilterDel(ctx context.Context, key, item string) error {
+	if err := r.client.Do(ctx, "CF.DEL", r.key(consts.RedisCuckooFilterKeyPrefix+key), item).Err(); err != nil {
+		return fmt.Errorf("cf.del key %s item %s: %w", key, item, err)
+	}
+	return nil
+}
+
+func (r *Redis) CuckooFilterAddNX(ctx context.Context, key, item string) (bool, error) {
+	res, err := r.client.Do(ctx, "CF.ADDNX", r.key(consts.RedisCuckooFilterKeyPrefix+key), item).Result()
+	if err != nil {
+		return false, fmt.Errorf("cf.addnx key %s item %s: %w", key, item, err)
+	}
+	n, ok := res.(int64)
+	if !ok {
+		return false, fmt.Errorf("unexpected cf.addnx result type for key %s", key)
+	}
+	return n == 1, nil
+}
+
+func (r *Redis) BloomAdd(ctx context.Context, key, item string) error {
+	if err := r.client.Do(ctx, "BF.ADD", r.key("bf:"+key), item).Err(); err != nil {
+		return fmt.Errorf("bf.add key %s item %s: %w", key, item, err)
+	}
+	return nil
+}
+
+func (r *Redis) BloomExists(ctx context.Context, key, item string) (bool, error) {
+	res, err := r.client.Do(ctx, "BF.EXISTS", r.key("bf:"+key), item).Result()
+	if err != nil {
+		return false, fmt.Errorf("bf.exists key %s item %s: %w", key, item, err)
+	}
+	n, ok := res.(int64)
+	if !ok {
+		return false, fmt.Errorf("unexpected bf.exists result type for key %s", key)
+	}
+	return n == 1, nil
 }

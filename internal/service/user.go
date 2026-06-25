@@ -28,6 +28,7 @@ type UserService struct {
 	transactor   *repository.Transactor
 	tokenCache   rds.TokenCache
 	sessionCache rds.IAMSessionCache
+	loginAttempt rds.LoginAttemptCache
 }
 
 func NewUserService(
@@ -37,6 +38,7 @@ func NewUserService(
 	transactor *repository.Transactor,
 	tokenCache rds.TokenCache,
 	sessionCache rds.IAMSessionCache,
+	loginAttempt rds.LoginAttemptCache,
 ) *UserService {
 	return &UserService{
 		repo:         repo,
@@ -45,13 +47,28 @@ func NewUserService(
 		transactor:   transactor,
 		tokenCache:   tokenCache,
 		sessionCache: sessionCache,
+		loginAttempt: loginAttempt,
 	}
 }
 
 func (s *UserService) Login(ctx context.Context, body req.UserLogin) (*token.TokenPair, string, error) {
+	sec := config.Get().LoginSecurity
+	ip := body.RequestMeta.IP
+
+	locked, ttl, err := s.loginAttempt.IsLocked(ctx, body.Username)
+	if err != nil {
+		logger.Error("check login lock failed", err)
+		return nil, "", errors.New("login failed, please try again later")
+	}
+	if locked {
+		accountLocked := errors.New("account is temporarily locked due to too many failed login attempts")
+		return nil, "", fmt.Errorf("%w: try again in %d seconds", accountLocked, int(ttl.Seconds()))
+	}
+
 	userInfo, err := s.repo.GetByUsername(ctx, body.Username)
 	if err != nil {
 		if db.IsNotFound(err) {
+			s.recordFailure(ctx, body.Username, ip, sec)
 			return nil, "", errors.New("user not found")
 		}
 		logger.Error("login failed", err)
@@ -68,8 +85,12 @@ func (s *UserService) Login(ctx context.Context, body req.UserLogin) (*token.Tok
 		return nil, "", errors.New("password check failed, please try again later")
 	}
 	if !ok {
+		s.recordFailure(ctx, body.Username, ip, sec)
 		return nil, "", errors.New("wrong password")
 	}
+
+	_ = s.loginAttempt.ResetFailure(ctx, body.Username)
+	_ = s.loginAttempt.ResetFailureByIP(ctx, ip)
 
 	roleCodes, err := s.getUserRoleCodes(ctx, userInfo.ID)
 	if err != nil {
@@ -97,6 +118,27 @@ func (s *UserService) Login(ctx context.Context, body req.UserLogin) (*token.Tok
 	}
 
 	return tokenPair, sid, nil
+}
+
+func (s *UserService) recordFailure(ctx context.Context, username, ip string, sec config.LoginSecurity) {
+	count, err := s.loginAttempt.IncrFailure(ctx, username, sec.AttemptWindow)
+	if err != nil {
+		logger.Error("incr login failure failed", err)
+		return
+	}
+	if count >= int64(sec.MaxAttempts) {
+		if err := s.loginAttempt.Lock(ctx, username, sec.LockoutDuration); err != nil {
+			logger.Error("lock account failed", err)
+		}
+		_ = s.loginAttempt.ResetFailure(ctx, username)
+	}
+
+	if ip != "" {
+		_, err := s.loginAttempt.IncrFailureByIP(ctx, ip, sec.AttemptWindow)
+		if err != nil {
+			logger.Error("incr login failure by ip failed", err)
+		}
+	}
 }
 
 func (s *UserService) LoginWithOAuthCode(ctx context.Context, payload *rds.OAuthCodePayload, applicationID int, meta req.RequestMeta) (*token.TokenPair, error) {

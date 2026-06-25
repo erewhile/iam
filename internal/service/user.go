@@ -7,6 +7,7 @@ import (
 
 	"github.com/erewhile/iam/config"
 	"github.com/erewhile/iam/internal/cache/rds"
+	"github.com/erewhile/iam/internal/consts"
 	"github.com/erewhile/iam/internal/dto/req"
 	"github.com/erewhile/iam/internal/dto/resp"
 	"github.com/erewhile/iam/internal/ent/db"
@@ -397,13 +398,19 @@ func (s *UserService) Update(ctx context.Context, params req.UserUpdatePathParam
 		return errors.New("password must be at least 6 characters long")
 	}
 
-	_, err := s.repo.GetByID(ctx, params.UserID)
+	userInfo, err := s.repo.GetByID(ctx, params.UserID)
 	if err != nil {
 		if db.IsNotFound(err) {
 			return errors.New("user not found")
 		}
 		logger.Error("get user failed", err)
 		return errors.New("failed to get user info")
+	}
+
+	if body.Status == model.UserStatusDisabled && userInfo.Status == model.UserStatusActive {
+		if err := s.ensureNotLastAdmin(ctx, userInfo.ID); err != nil {
+			return err
+		}
 	}
 
 	exists, err := s.repo.Duplicate(ctx, body.Username, body.Email, params.UserID)
@@ -442,7 +449,6 @@ func (s *UserService) Delete(ctx context.Context, params req.DeletePathParams) e
 	if err != nil {
 		if db.IsNotFound(err) {
 			return errors.New("user not found")
-
 		}
 		logger.Error("get user failed", err)
 		return errors.New("failed to get user info")
@@ -452,9 +458,31 @@ func (s *UserService) Delete(ctx context.Context, params req.DeletePathParams) e
 		return errors.New("the system cannot delete")
 	}
 
+	if err := s.ensureNotLastAdmin(ctx, userInfo.ID); err != nil {
+		return err
+	}
+
 	if err := s.repo.Delete(ctx, params); err != nil {
 		logger.Error("failed to delete user", err)
 		return errors.New("failed to delete user")
+	}
+	return nil
+}
+
+func (s *UserService) ensureNotLastAdmin(ctx context.Context, userID int) error {
+	isAdmin, err := s.roleRepo.UserHasRole(ctx, userID, consts.RoleSuperAdmin)
+	if err != nil {
+		return errors.New("failed to verify user role")
+	}
+	if !isAdmin {
+		return nil
+	}
+	count, err := s.roleRepo.CountUsersByRoleCode(ctx, consts.RoleSuperAdmin)
+	if err != nil {
+		return errors.New("failed to verify admin count")
+	}
+	if count <= 1 {
+		return errors.New("cannot delete or disable the last admin account")
 	}
 	return nil
 }

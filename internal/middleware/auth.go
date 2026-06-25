@@ -48,3 +48,25 @@ func Auth() gin.HandlerFunc {
 		c.Next()
 	}
 }
+
+func RequireRoles(codes ...string) gin.HandlerFunc {
+	allowed := make(map[string]struct{}, len(codes))
+	for _, c := range codes {
+		allowed[c] = struct{}{}
+	}
+
+	return func(c *gin.Context) {
+		rolesVal, _ := c.Get(consts.MiddlewareRoles)
+		roles, _ := rolesVal.([]string)
+
+		for _, r := range roles {
+			if _, ok := allowed[r]; ok {
+				c.Next()
+				return
+			}
+		}
+
+		response.Custom(c.Writer, http.StatusForbidden, "insufficient permissions")
+		c.Abort()
+	}
+}

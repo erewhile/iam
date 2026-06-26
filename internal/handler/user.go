@@ -13,6 +13,7 @@ import (
 	"github.com/erewhile/iam/internal/dto/req"
 	"github.com/erewhile/iam/internal/dto/resp"
 	"github.com/erewhile/iam/internal/logger"
+	"github.com/erewhile/iam/internal/model"
 	"github.com/erewhile/iam/internal/service"
 	"github.com/erewhile/iam/pkg/response"
 	"github.com/erewhile/iam/pkg/response/code"
@@ -299,4 +300,14 @@ func (h *UserHandler) Delete(c *gin.Context) {
 	}
 
 	response.OK(c.Writer)
+}
+
+func (h *UserHandler) UserStatuses(c *gin.Context) {
+	statuses := model.AllUserStatuses()
+	options := make([]resp.UserStatusOption, 0, len(statuses))
+	for _, s := range statuses {
+		options = append(options, resp.UserStatusOption{Value: s, Label: s.String()})
+	}
+
+	response.OkData(c.Writer, options)
 }

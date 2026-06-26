@@ -55,6 +55,7 @@ func Init(e *gin.Engine) {
 		adminUsers.POST("", app.User.Create)
 		adminUsers.PUT("/:id", app.User.Update)
 		adminUsers.DELETE("/:id", app.User.Delete)
+		adminUsers.GET("/statuses", app.User.UserStatuses)
 		adminUsers.GET("/:id/roles", app.UserRole.Roles)
 		adminUsers.PUT("/:id/roles", app.UserRole.Assign)
 

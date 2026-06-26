@@ -1,7 +1,6 @@
 package middleware
 
 import (
-	"fmt"
 	"net/http"
 
 	"github.com/erewhile/iam/cmd/flags"
@@ -9,7 +8,6 @@ import (
 	"github.com/erewhile/iam/internal/cache/rds"
 	"github.com/erewhile/iam/internal/consts"
 	"github.com/erewhile/iam/internal/dto/req"
-	"github.com/erewhile/iam/internal/logger"
 	"github.com/erewhile/iam/internal/token"
 	"github.com/erewhile/iam/pkg/response"
 	"github.com/erewhile/iam/pkg/utils"
@@ -34,8 +32,6 @@ func Auth() gin.HandlerFunc {
 			c.Abort()
 			return
 		}
-
-		logger.Info(fmt.Sprintf("debug: payload.Roles = %+v, len=%d", payload.Roles, len(payload.Roles)))
 
 		online, err := tokenCache.ExistsAccess(c.Request.Context(), claims.SessionID)
 		if err != nil || !online {

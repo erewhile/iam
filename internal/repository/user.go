@@ -78,6 +78,7 @@ func (r *userRepository) List(ctx context.Context, params req.UserList) ([]resp.
 			UUID:         item.UUID,
 			Email:        item.Email,
 			Username:     item.Username,
+			Status:       item.Status,
 			StatusDetail: item.Status.String(),
 		})
 	}

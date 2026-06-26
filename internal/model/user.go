@@ -36,3 +36,7 @@ func (s UserStatus) IsValid() bool {
 		return false
 	}
 }
+
+func AllUserStatuses() []UserStatus {
+	return []UserStatus{UserStatusPending, UserStatusActive, UserStatusDisabled}
+}

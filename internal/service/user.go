@@ -400,15 +400,12 @@ func (s *UserService) Info(ctx context.Context, params req.InfoPathParams) (*res
 		return nil, errors.New("failed to get user info")
 	}
 
-	if userInfo.Status != model.UserStatusActive {
-		return nil, errors.New("account is disabled")
-	}
-
 	return &resp.UserInfo{
 		ID:           userInfo.ID,
 		Username:     userInfo.Username,
 		Email:        userInfo.Email,
 		UUID:         userInfo.UUID,
+		Status:       userInfo.Status,
 		StatusDetail: userInfo.Status.String(),
 	}, nil
 }

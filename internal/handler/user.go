@@ -278,9 +278,18 @@ func (h *UserHandler) Update(c *gin.Context) {
 	}
 
 	ctx := c.Request.Context()
-	if err := h.srv.Update(ctx, params, body); err != nil {
+	invalidated, err := h.srv.Update(ctx, params, body)
+	if err != nil {
 		response.BadRequest(c.Writer, err.Error())
 		return
+	}
+
+	currentUserID := c.GetInt(consts.MiddlewareUserID)
+	if invalidated && currentUserID == params.UserID {
+		cookieUtil := utils.NewCookieUtil(!flags.Debug)
+		cookieUtil.Delete(c.Writer, config.Get().Token.AccessTokenCookieKey)
+		cookieUtil.Delete(c.Writer, config.Get().Token.RefreshTokenCookieKey)
+		cookieUtil.Delete(c.Writer, config.Get().Session.CookieKey)
 	}
 
 	response.OK(c.Writer)
@@ -297,6 +306,14 @@ func (h *UserHandler) Delete(c *gin.Context) {
 	if err := h.srv.Delete(ctx, params); err != nil {
 		response.BadRequest(c.Writer, err.Error())
 		return
+	}
+
+	currentUserID := c.GetInt(consts.MiddlewareUserID)
+	if currentUserID == params.ID {
+		cookieUtil := utils.NewCookieUtil(!flags.Debug)
+		cookieUtil.Delete(c.Writer, config.Get().Token.AccessTokenCookieKey)
+		cookieUtil.Delete(c.Writer, config.Get().Token.RefreshTokenCookieKey)
+		cookieUtil.Delete(c.Writer, config.Get().Session.CookieKey)
 	}
 
 	response.OK(c.Writer)

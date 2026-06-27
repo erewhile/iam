@@ -5,7 +5,7 @@ const UserSystemID = 1
 type UserStatus uint8
 
 const (
-	UserStatusPending UserStatus = iota
+	UserStatusPending UserStatus = iota + 1
 	UserStatusActive
 	UserStatusDisabled
 )

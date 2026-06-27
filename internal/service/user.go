@@ -54,8 +54,9 @@ func NewUserService(
 }
 
 var (
-	ErrInvalidClient   = errors.New("invalid client identifier")
-	ErrInvalidRedirect = errors.New("redirect uri is strictly blocked by security policy")
+	ErrInvalidClient      = errors.New("invalid client identifier")
+	ErrInvalidRedirect    = errors.New("redirect uri is strictly blocked by security policy")
+	ErrInvalidCredentials = errors.New("invalid username or password")
 )
 
 func (s *UserService) Login(ctx context.Context, body req.UserLogin) (*token.TokenPair, string, error) {
@@ -76,7 +77,7 @@ func (s *UserService) Login(ctx context.Context, body req.UserLogin) (*token.Tok
 	if err != nil {
 		if db.IsNotFound(err) {
 			s.recordFailure(ctx, body.Username, ip, sec)
-			return nil, "", errors.New("user not found")
+			return nil, "", ErrInvalidCredentials
 		}
 		logger.Error("login failed", err)
 		return nil, "", errors.New("login failed")
@@ -93,7 +94,7 @@ func (s *UserService) Login(ctx context.Context, body req.UserLogin) (*token.Tok
 	}
 	if !ok {
 		s.recordFailure(ctx, body.Username, ip, sec)
-		return nil, "", errors.New("wrong password")
+		return nil, "", ErrInvalidCredentials
 	}
 
 	_ = s.loginAttempt.ResetFailure(ctx, body.Username)
@@ -183,7 +184,12 @@ func (s *UserService) Refresh(ctx context.Context, body req.UserRefresh) (*token
 	}
 
 	tokenHashed := hash.HashBlake2b256([]byte(body.Token))
-	if !s.isTokenValid(ctx, tokenHashed, model.TokenTypeRefresh) {
+	valid, err := s.isTokenValid(ctx, tokenHashed, model.TokenTypeRefresh)
+	if err != nil {
+		logger.Error("check token valid failed", err)
+		return nil, errors.New("refresh failed, please try again later")
+	}
+	if !valid {
 		s.invalidateToken(ctx, claims.SessionID)
 		return nil, errors.New("refresh token revoked or not found")
 	}
@@ -227,7 +233,9 @@ func (s *UserService) Refresh(ctx context.Context, body req.UserRefresh) (*token
 }
 
 func (s *UserService) Logout(ctx context.Context, sessionID uuid.UUID, iamSID string) error {
-	s.invalidateToken(ctx, sessionID)
+	if err := s.invalidateToken(ctx, sessionID); err != nil {
+		logger.Error("invalidate token failed during logout", err)
+	}
 
 	if err := s.token.RevokeBySession(ctx, sessionID); err != nil {
 		logger.Error("logout failed", err)
@@ -296,24 +304,45 @@ func (s *UserService) issueTokenPair(
 		return nil, errors.New("save token failed")
 	}
 
-	_ = s.tokenCache.SetAccess(ctx, sessionID, config.Get().Token.AccessTokenTTL)
-	_ = s.tokenCache.SetRefresh(ctx, sessionID, config.Get().Token.RefreshTokenTTL)
+	if err := s.tokenCache.SetAccess(ctx, sessionID, config.Get().Token.AccessTokenTTL); err != nil {
+		logger.Error("set access token cache failed", err)
+		return nil, errors.New("issue token failed")
+	}
+	if err := s.tokenCache.SetRefresh(ctx, sessionID, config.Get().Token.RefreshTokenTTL); err != nil {
+		logger.Error("set refresh token cache failed", err)
+		return nil, errors.New("issue token failed")
+	}
 
 	return tokenPair, nil
 }
 
-func (s *UserService) isTokenValid(ctx context.Context, hashed []byte, tt model.TokenType) bool {
+func (s *UserService) isTokenValid(ctx context.Context, hashed []byte, tt model.TokenType) (bool, error) {
 	_, err := s.token.GetIfValid(ctx, hashed, tt)
-	return err == nil
+	if err == nil {
+		return true, nil
+	}
+	if db.IsNotFound(err) {
+		return false, nil
+	}
+	return false, err
 }
 
-func (s *UserService) invalidateToken(ctx context.Context, sessionID uuid.UUID) {
+func (s *UserService) invalidateToken(ctx context.Context, sessionID uuid.UUID) error {
+	var errs []error
+
 	if err := s.tokenCache.DelAccess(ctx, sessionID); err != nil {
-		logger.Error("del access cache failed", err)
+		errs = append(errs, fmt.Errorf("del access token failed (session=%s): %w", sessionID, err))
 	}
 	if err := s.tokenCache.DelRefresh(ctx, sessionID); err != nil {
-		logger.Error("del refresh cache failed", err)
+		errs = append(errs, fmt.Errorf("del refresh token failed (session=%s): %w", sessionID, err))
 	}
+
+	if len(errs) > 0 {
+		return errors.Join(errs...)
+	}
+
+	logger.Info("token deleted", "sessionID", sessionID)
+	return nil
 }
 
 func (s *UserService) getUserRoleCodes(ctx context.Context, userID int) ([]string, error) {
@@ -439,60 +468,63 @@ func (s *UserService) Create(ctx context.Context, body req.UserCreate) error {
 	return nil
 }
 
-func (s *UserService) Update(ctx context.Context, params req.UserUpdatePathParams, body req.UserUpdate) error {
+func (s *UserService) Update(ctx context.Context, params req.UserUpdatePathParams, body req.UserUpdate) (bool, error) {
 	if !body.Status.IsValid() {
-		return errors.New("invalid user status")
+		return false, errors.New("invalid user status")
 	}
 
 	if body.Password != "" && len(body.Password) < 6 {
-		// return errors.New("password must be greater than 6 characters")
-		return errors.New("password must be at least 6 characters long")
+		return false, errors.New("password must be at least 6 characters long")
 	}
 
 	userInfo, err := s.repo.GetByID(ctx, params.UserID)
 	if err != nil {
 		if db.IsNotFound(err) {
-			return errors.New("user not found")
+			return false, errors.New("user not found")
 		}
 		logger.Error("get user failed", err)
-		return errors.New("failed to get user info")
+		return false, errors.New("failed to get user info")
 	}
 
-	if body.Status == model.UserStatusDisabled && userInfo.Status == model.UserStatusActive {
+	if userInfo.Status == model.UserStatusActive && body.Status != model.UserStatusActive {
 		if err := s.ensureNotLastAdmin(ctx, userInfo.ID); err != nil {
-			return err
+			return false, err
 		}
 	}
 
 	exists, err := s.repo.Duplicate(ctx, body.Username, body.Email, params.UserID)
 	if err != nil {
 		logger.Error("failed to check if user exists", err)
-		return errors.New("failed to check if user exists")
+		return false, errors.New("failed to check if user exists")
 	}
 	if exists {
-		return errors.New("username or email already exists")
+		return false, errors.New("username or email already exists")
 	}
 
 	var hashed string
-	if body.Password != "" {
+	passwordChanged := body.Password != ""
+	if passwordChanged {
 		hashed, err = password.Hash(body.Password)
 		if err != nil {
 			logger.Error("failed to hash password", err)
-			return errors.New("failed to hash password")
+			return false, errors.New("failed to hash password")
 		}
 	}
 
 	_, err = s.repo.Update(ctx, params, body, hashed)
 	if err != nil {
 		logger.Error("failed to update user", err)
-		return errors.New("failed to update user")
+		return false, errors.New("failed to update user")
 	}
 
-	if body.Status == model.UserStatusDisabled {
-		_ = s.InvalidateAllSessions(ctx, params.UserID)
+	needInvalidate := body.Status != model.UserStatusActive || passwordChanged
+	if needInvalidate {
+		if err := s.InvalidateAllSessions(ctx, params.UserID); err != nil {
+			logger.Error("invalidate sessions failed after user update", err)
+		}
 	}
 
-	return nil
+	return needInvalidate, nil
 }
 
 func (s *UserService) Delete(ctx context.Context, params req.DeletePathParams) error {
@@ -517,6 +549,11 @@ func (s *UserService) Delete(ctx context.Context, params req.DeletePathParams) e
 		logger.Error("failed to delete user", err)
 		return errors.New("failed to delete user")
 	}
+
+	if err := s.InvalidateAllSessions(ctx, userInfo.ID); err != nil {
+		logger.Error("invalidate sessions failed after user delete", err)
+	}
+
 	return nil
 }
 
@@ -533,27 +570,36 @@ func (s *UserService) ensureNotLastAdmin(ctx context.Context, userID int) error 
 		return errors.New("failed to verify admin count")
 	}
 	if count <= 1 {
-		return errors.New("cannot delete or disable the last admin account")
+		return errors.New("cannot remove the last admin account's active status")
 	}
 	return nil
 }
 
 func (s *UserService) InvalidateAllSessions(ctx context.Context, userID int) error {
-	if err := s.token.RevokeAllByUser(ctx, userID); err != nil {
-		return fmt.Errorf("revoke tokens failed: %w", err)
-	}
+	var errs []error
 
 	sessionIDs, err := s.token.ListActiveSessionsByUser(ctx, userID)
 	if err != nil {
-		logger.Error("list active sessions failed", err)
+		errs = append(errs, fmt.Errorf("list active sessions failed: %w", err))
 	}
+
+	if err := s.token.RevokeAllByUser(ctx, userID); err != nil {
+		errs = append(errs, fmt.Errorf("revoke tokens failed: %w", err))
+	}
+
 	for _, sid := range sessionIDs {
-		s.invalidateToken(ctx, sid)
+		if err := s.invalidateToken(ctx, sid); err != nil {
+			logger.Error("invalidate token failed", err, "sessionID", sid)
+			errs = append(errs, err)
+		}
 	}
 
 	if err := s.sessionCache.DelAllByUser(ctx, userID); err != nil {
-		logger.Error("clear iam sessions failed", err)
+		errs = append(errs, fmt.Errorf("clear iam sessions failed: %w", err))
 	}
 
+	if len(errs) > 0 {
+		return errors.Join(errs...)
+	}
 	return nil
 }

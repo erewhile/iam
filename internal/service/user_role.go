@@ -47,6 +47,18 @@ func (s *UserRoleService) Roles(ctx context.Context, params req.UserRoleRoles) (
 	return result, nil
 }
 
+func (s *UserRoleService) RoleIds(ctx context.Context, params req.UserRoleRoleIds) ([]int, error) {
+	roles, err := s.repo.GetRolesByUserID(ctx, params.UserID)
+	if err != nil {
+		return nil, err
+	}
+	ids := make([]int, 0, len(roles))
+	for _, r := range roles {
+		ids = append(ids, r.ID)
+	}
+	return ids, nil
+}
+
 func (s *UserRoleService) Assign(ctx context.Context, params req.UserRoleAssignPathParams, body req.UserRoleAssign) error {
 	if _, err := s.userRepo.GetByID(ctx, params.UserID); err != nil {
 		if db.IsNotFound(err) {

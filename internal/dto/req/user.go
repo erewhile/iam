@@ -23,6 +23,10 @@ type UserList struct {
 	Pagination
 }
 
+type UserOptions struct {
+	Keyword string `form:"keyword,omitempty" binding:"max=26"`
+}
+
 type UserCreate struct {
 	Email    string           `json:"email" binding:"required,min=6,max=128"`
 	Username string           `json:"username" binding:"required,max=26"`

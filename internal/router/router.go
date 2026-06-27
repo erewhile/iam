@@ -51,12 +51,14 @@ func Init(e *gin.Engine) {
 	{
 		adminUsers := admin.Group("/users")
 		adminUsers.GET("", app.User.List)
+		adminUsers.GET("/options", app.User.Options)
 		adminUsers.GET("/:id", app.User.Info)
 		adminUsers.POST("", app.User.Create)
 		adminUsers.PUT("/:id", app.User.Update)
 		adminUsers.DELETE("/:id", app.User.Delete)
 		adminUsers.GET("/statuses", app.User.UserStatuses)
 		adminUsers.GET("/:id/roles", app.UserRole.Roles)
+		adminUsers.GET("/:id/role-ids", app.UserRole.RoleIds)
 		adminUsers.PUT("/:id/roles", app.UserRole.Assign)
 
 		admin.Group("/tokens").

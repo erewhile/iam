@@ -231,6 +231,19 @@ func (h *UserHandler) List(c *gin.Context) {
 	})
 }
 
+func (h *UserHandler) Options(c *gin.Context) {
+	var params req.UserOptions
+
+	ctx := c.Request.Context()
+	options, err := h.srv.Options(ctx, params)
+	if err != nil {
+		response.Fail(c.Writer, code.Parameter)
+		return
+	}
+
+	response.OkData(c.Writer, options)
+}
+
 func (h *UserHandler) Info(c *gin.Context) {
 	var params req.InfoPathParams
 	if err := c.ShouldBindUri(&params); err != nil {

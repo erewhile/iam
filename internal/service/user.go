@@ -418,6 +418,16 @@ func (s *UserService) List(ctx context.Context, params req.UserList) ([]resp.Use
 	return content, count, nil
 }
 
+func (s *UserService) Options(ctx context.Context, params req.UserOptions) ([]resp.UserSelectOption, error) {
+	options, err := s.repo.Options(ctx, params.Keyword)
+	if err != nil {
+		logger.Error("failed to retrieve user select options", err)
+		return nil, errors.New("failed to retrieve user options")
+	}
+
+	return options, nil
+}
+
 func (s *UserService) Info(ctx context.Context, params req.InfoPathParams) (*resp.UserInfo, error) {
 	userInfo, err := s.repo.GetByID(ctx, params.ID)
 

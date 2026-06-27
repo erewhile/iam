@@ -31,6 +31,22 @@ func (h *UserRoleHandler) Roles(c *gin.Context) {
 	response.OkData(c.Writer, roles)
 }
 
+func (h *UserRoleHandler) RoleIds(c *gin.Context) {
+	var params req.UserRoleRoleIds
+	if err := c.ShouldBindUri(&params); err != nil {
+		response.BadRequest(c.Writer, err.Error())
+		return
+	}
+
+	roles, err := h.srv.RoleIds(c.Request.Context(), params)
+	if err != nil {
+		response.BadRequest(c.Writer, err.Error())
+		return
+	}
+
+	response.OkData(c.Writer, roles)
+}
+
 func (h *UserRoleHandler) Assign(c *gin.Context) {
 	var params req.UserRoleAssignPathParams
 	if err := c.ShouldBindUri(&params); err != nil {

@@ -4,6 +4,10 @@ type UserRoleRoles struct {
 	UserID int `uri:"id" binding:"required"`
 }
 
+type UserRoleRoleIds struct {
+	UserID int `uri:"id" binding:"required"`
+}
+
 type UserRoleAssignPathParams struct {
 	UserID int `uri:"id" binding:"required"`
 }

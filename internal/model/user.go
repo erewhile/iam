@@ -5,7 +5,7 @@ const UserSystemID = 1
 type UserStatus uint8
 
 const (
-	UserStatusPending UserStatus = iota
+	UserStatusPending UserStatus = iota + 1
 	UserStatusActive
 	UserStatusDisabled
 )
@@ -35,4 +35,8 @@ func (s UserStatus) IsValid() bool {
 	default:
 		return false
 	}
+}
+
+func AllUserStatuses() []UserStatus {
+	return []UserStatus{UserStatusPending, UserStatusActive, UserStatusDisabled}
 }

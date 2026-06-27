@@ -13,6 +13,7 @@ import (
 	"github.com/erewhile/iam/internal/dto/req"
 	"github.com/erewhile/iam/internal/dto/resp"
 	"github.com/erewhile/iam/internal/logger"
+	"github.com/erewhile/iam/internal/model"
 	"github.com/erewhile/iam/internal/service"
 	"github.com/erewhile/iam/pkg/response"
 	"github.com/erewhile/iam/pkg/response/code"
@@ -124,25 +125,14 @@ func (h *UserHandler) Login(c *gin.Context) {
 func (h *UserHandler) Profile(c *gin.Context) {
 	userID := c.GetInt(consts.MiddlewareUserID)
 
-	uuidVal, exists := c.Get(consts.MiddlewareUserUUID)
-	if !exists {
-		response.Custom(c.Writer, http.StatusOK, "missing uuid")
-		return
-	}
-	userUUID, ok := uuidVal.(uuid.UUID)
-	if !ok {
-		response.Custom(c.Writer, http.StatusOK, "invalid uuid type")
+	ctx := c.Request.Context()
+	profile, err := h.srv.Profile(ctx, userID)
+	if err != nil {
+		response.BadRequest(c.Writer, err.Error())
 		return
 	}
 
-	rolesVal, _ := c.Get(consts.MiddlewareRoles)
-	roles, _ := rolesVal.([]string)
-
-	response.OkData(c.Writer, &resp.UserProfile{
-		UserID:   userID,
-		UserUUID: userUUID,
-		Roles:    roles,
-	})
+	response.OkData(c.Writer, profile)
 }
 
 func (h *UserHandler) Refresh(c *gin.Context) {
@@ -230,6 +220,19 @@ func (h *UserHandler) List(c *gin.Context) {
 	})
 }
 
+func (h *UserHandler) Options(c *gin.Context) {
+	var params req.UserOptions
+
+	ctx := c.Request.Context()
+	options, err := h.srv.Options(ctx, params)
+	if err != nil {
+		response.Fail(c.Writer, code.Parameter)
+		return
+	}
+
+	response.OkData(c.Writer, options)
+}
+
 func (h *UserHandler) Info(c *gin.Context) {
 	var params req.InfoPathParams
 	if err := c.ShouldBindUri(&params); err != nil {
@@ -277,9 +280,18 @@ func (h *UserHandler) Update(c *gin.Context) {
 	}
 
 	ctx := c.Request.Context()
-	if err := h.srv.Update(ctx, params, body); err != nil {
+	invalidated, err := h.srv.Update(ctx, params, body)
+	if err != nil {
 		response.BadRequest(c.Writer, err.Error())
 		return
+	}
+
+	currentUserID := c.GetInt(consts.MiddlewareUserID)
+	if invalidated && currentUserID == params.UserID {
+		cookieUtil := utils.NewCookieUtil(!flags.Debug)
+		cookieUtil.Delete(c.Writer, config.Get().Token.AccessTokenCookieKey)
+		cookieUtil.Delete(c.Writer, config.Get().Token.RefreshTokenCookieKey)
+		cookieUtil.Delete(c.Writer, config.Get().Session.CookieKey)
 	}
 
 	response.OK(c.Writer)
@@ -298,5 +310,23 @@ func (h *UserHandler) Delete(c *gin.Context) {
 		return
 	}
 
+	currentUserID := c.GetInt(consts.MiddlewareUserID)
+	if currentUserID == params.ID {
+		cookieUtil := utils.NewCookieUtil(!flags.Debug)
+		cookieUtil.Delete(c.Writer, config.Get().Token.AccessTokenCookieKey)
+		cookieUtil.Delete(c.Writer, config.Get().Token.RefreshTokenCookieKey)
+		cookieUtil.Delete(c.Writer, config.Get().Session.CookieKey)
+	}
+
 	response.OK(c.Writer)
+}
+
+func (h *UserHandler) UserStatuses(c *gin.Context) {
+	statuses := model.AllUserStatuses()
+	options := make([]resp.UserStatusOption, 0, len(statuses))
+	for _, s := range statuses {
+		options = append(options, resp.UserStatusOption{Value: s, Label: s.String()})
+	}
+
+	response.OkData(c.Writer, options)
 }

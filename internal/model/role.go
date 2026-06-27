@@ -1,7 +1,7 @@
 package model
 
 const (
-	RoleSuperAdmin = "super_admin"
+	RoleSuperAdminCode = "super_admin"
 )
 
 const (

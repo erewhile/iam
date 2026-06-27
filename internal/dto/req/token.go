@@ -16,6 +16,7 @@ type TokenCreate struct {
 	UserID        int
 	Jti           uuid.UUID
 	SessionID     uuid.UUID
+	CookieID      string
 	ApplicationID *int
 	Type          model.TokenType
 	TokenHash     []byte

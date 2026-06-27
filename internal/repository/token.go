@@ -17,6 +17,7 @@ type TokenRepository interface {
 	Create(ctx context.Context, params req.TokenCreate) error
 	GetByID(ctx context.Context, id int) (*db.Token, error)
 	GetIfValid(ctx context.Context, hashed []byte, tokenType model.TokenType) (*db.Token, error)
+	GetBySession(ctx context.Context, sessionID uuid.UUID) (*db.Token, error)
 	RevokeByID(ctx context.Context, id int) error
 	RevokeBySession(ctx context.Context, sessionID uuid.UUID) error
 	RevokeByJTI(ctx context.Context, jti uuid.UUID) error
@@ -90,6 +91,7 @@ func (r *tokenRepository) Create(ctx context.Context, params req.TokenCreate) er
 	_, err := r.client.Token.Create().
 		SetUserID(params.UserID).
 		SetJti(params.Jti).
+		SetCookieID(params.CookieID).
 		SetSessionID(params.SessionID).
 		SetType(params.Type).
 		SetTokenHash(params.TokenHash).
@@ -126,6 +128,20 @@ func (r *tokenRepository) GetIfValid(ctx context.Context, hashed []byte, tokenTy
 			token.RevokedAtIsNil(),
 		).
 		Only(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return t, nil
+}
+
+func (r *tokenRepository) GetBySession(ctx context.Context, sessionID uuid.UUID) (*db.Token, error) {
+	t, err := r.client.Token.Query().
+		Where(
+			token.SessionIDEQ(sessionID),
+			token.ExpiresAtGT(utils.Now()),
+			token.RevokedAtIsNil(),
+		).
+		First(ctx)
 	if err != nil {
 		return nil, err
 	}

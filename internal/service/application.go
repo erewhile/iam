@@ -59,7 +59,7 @@ func (s *ApplicationService) Create(ctx context.Context, body req.ApplicationCre
 		return nil, errors.New("name or client_id or client_secret already exists")
 	}
 
-	clientSecret, err := utils.RandomString(64)
+	clientSecret, err := utils.RandomAlphanumeric(64)
 	if err != nil {
 		return nil, err
 	}
@@ -113,7 +113,7 @@ func (s *ApplicationService) Update(ctx context.Context, params req.ApplicationU
 }
 
 func (s *ApplicationService) UpdateSecret(ctx context.Context, params req.ApplicationUpdatePathParams) (*resp.ApplicationUpdateSecret, error) {
-	clientSecret, err := utils.RandomString(64)
+	clientSecret, err := utils.RandomAlphanumeric(64)
 	if err != nil {
 		return nil, err
 	}

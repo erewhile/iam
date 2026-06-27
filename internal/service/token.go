@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/erewhile/iam/internal/cache/rds"
 	"github.com/erewhile/iam/internal/dto/req"
@@ -13,13 +14,24 @@ import (
 )
 
 type TokenService struct {
-	repo       repository.TokenRepository
-	userRepo   repository.UserRepository
-	tokenCache rds.TokenCache
+	repo         repository.TokenRepository
+	userRepo     repository.UserRepository
+	tokenCache   rds.TokenCache
+	sessionCache rds.IAMSessionCache
 }
 
-func NewTokenService(repo repository.TokenRepository, tokenCache rds.TokenCache, userRepo repository.UserRepository) *TokenService {
-	return &TokenService{repo: repo, tokenCache: tokenCache, userRepo: userRepo}
+func NewTokenService(
+	repo repository.TokenRepository,
+	tokenCache rds.TokenCache,
+	userRepo repository.UserRepository,
+	sessionCache rds.IAMSessionCache,
+) *TokenService {
+	return &TokenService{
+		repo:         repo,
+		tokenCache:   tokenCache,
+		userRepo:     userRepo,
+		sessionCache: sessionCache,
+	}
 }
 
 func (s *TokenService) List(ctx context.Context, params req.TokenList) ([]resp.TokenListItem, int, error) {
@@ -93,12 +105,30 @@ func (s *TokenService) Revoke(ctx context.Context, params req.TokenRevokePathPar
 		return errors.New("failed to get token info")
 	}
 
-	_ = s.tokenCache.DelAccess(ctx, tokenInfo.SessionID)
-	_ = s.tokenCache.DelRefresh(ctx, tokenInfo.SessionID)
+	var errs []error
+
+	if err := s.tokenCache.DelAccess(ctx, tokenInfo.SessionID); err != nil {
+		errs = append(errs, fmt.Errorf("del access token failed (session=%s): %w", tokenInfo.SessionID, err))
+	}
+	if err := s.tokenCache.DelRefresh(ctx, tokenInfo.SessionID); err != nil {
+		errs = append(errs, fmt.Errorf("del refresh token failed (session=%s): %w", tokenInfo.SessionID, err))
+	}
+	if tokenInfo.CookieID != "" {
+		if err := s.sessionCache.Del(ctx, tokenInfo.CookieID); err != nil {
+			errs = append(errs, fmt.Errorf("clear iam session failed (session=%s): %w", tokenInfo.SessionID, err))
+		}
+	}
 
 	if err := s.repo.RevokeBySession(ctx, tokenInfo.SessionID); err != nil {
+		errs = append(errs, fmt.Errorf("revoke by session failed (session=%s): %w", tokenInfo.SessionID, err))
+	}
+
+	if len(errs) > 0 {
+		err := errors.Join(errs...)
 		logger.Error("failed to revoke token", err.Error())
 		return errors.New("failed to revoke token")
 	}
+
+	logger.Info("token revoked", "sessionID", tokenInfo.SessionID)
 	return nil
 }

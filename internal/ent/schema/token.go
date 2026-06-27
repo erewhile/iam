@@ -39,6 +39,10 @@ func (Token) Fields() []ent.Field {
 
 		field.UUID("session_id", uuid.UUID{}),
 
+		field.String("cookie_id").
+			MaxLen(32).
+			Optional(),
+
 		field.Int("application_id").
 			Optional().
 			Nillable(),

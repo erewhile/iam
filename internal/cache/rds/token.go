@@ -26,6 +26,7 @@ type OAuthCodePayload struct {
 	UserUUID  uuid.UUID `json:"user_uuid"`
 	SessionID uuid.UUID `json:"session_id"`
 	ClientID  string    `json:"client_id"`
+	CookieID  string    `json:"cookie_id"`
 }
 
 type tokenCache struct {

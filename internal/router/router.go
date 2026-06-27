@@ -47,7 +47,7 @@ func Init(e *gin.Engine) {
 	}
 
 	admin := protected.Group("")
-	admin.Use(middleware.RequireRoles(model.RoleSuperAdmin))
+	admin.Use(middleware.RequireRoles(model.RoleSuperAdminCode))
 	{
 		adminUsers := admin.Group("/users")
 		adminUsers.GET("", app.User.List)

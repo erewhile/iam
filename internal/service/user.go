@@ -165,7 +165,23 @@ func (s *UserService) LoginWithOAuthCode(ctx context.Context, payload *rds.OAuth
 	return s.issueTokenPair(ctx, userPayload, payload.SessionID, meta)
 }
 
-func (s *UserService) Profile(ctx context.Context, userID int) {}
+func (s *UserService) Profile(ctx context.Context, userID int) (*resp.UserProfile, error) {
+	userInfo, err := s.repo.GetByID(ctx, userID)
+
+	if err != nil {
+		if db.IsNotFound(err) {
+			return nil, errors.New("user not found")
+		}
+		logger.Error("failed to get user info", err)
+		return nil, errors.New("failed to get user info")
+	}
+
+	return &resp.UserProfile{
+		Username: userInfo.Username,
+		Email:    userInfo.Email,
+		UUID:     userInfo.UUID,
+	}, nil
+}
 
 func (s *UserService) Refresh(ctx context.Context, body req.UserRefresh) (*token.TokenPair, error) {
 	claims, payload, err := token.Validate(
@@ -568,14 +584,14 @@ func (s *UserService) Delete(ctx context.Context, params req.DeletePathParams) e
 }
 
 func (s *UserService) ensureNotLastAdmin(ctx context.Context, userID int) error {
-	isAdmin, err := s.roleRepo.UserHasRole(ctx, userID, model.RoleSuperAdmin)
+	isAdmin, err := s.roleRepo.UserHasRole(ctx, userID, model.RoleSuperAdminCode)
 	if err != nil {
 		return errors.New("failed to verify user role")
 	}
 	if !isAdmin {
 		return nil
 	}
-	count, err := s.roleRepo.CountUsersByRoleCode(ctx, model.RoleSuperAdmin)
+	count, err := s.roleRepo.CountUsersByRoleCode(ctx, model.RoleSuperAdminCode)
 	if err != nil {
 		return errors.New("failed to verify admin count")
 	}

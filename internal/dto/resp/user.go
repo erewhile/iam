@@ -6,9 +6,9 @@ import (
 )
 
 type UserProfile struct {
-	UserID   int       `json:"user_id"`
-	UserUUID uuid.UUID `json:"user_uuid"`
-	Roles    []string  `json:"roles,omitempty"`
+	UUID     uuid.UUID `json:"uuid"`
+	Email    string    `json:"email"`
+	Username string    `json:"username"`
 }
 
 type UserListItem struct {

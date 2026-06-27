@@ -15,7 +15,7 @@ func initRole(client *db.Client) error {
 	defer cancel()
 
 	exists, err := client.Role.Query().
-		Where(role.CodeEQ(model.RoleSuperAdmin)).
+		Where(role.CodeEQ(model.RoleSuperAdminCode)).
 		Exist(ctx)
 	if err != nil {
 		return fmt.Errorf("check super admin role failed: %w", err)
@@ -25,7 +25,7 @@ func initRole(client *db.Client) error {
 	}
 
 	_, err = client.Role.Create().
-		SetCode(model.RoleSuperAdmin).
+		SetCode(model.RoleSuperAdminCode).
 		SetName("Super Admin").
 		SetIsSystem(model.RoleSystem).
 		Save(ctx)

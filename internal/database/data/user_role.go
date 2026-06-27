@@ -16,7 +16,7 @@ func initUserRole(client *db.Client) error {
 	defer cancel()
 
 	roleInfo, err := client.Role.Query().
-		Where(role.CodeEQ(model.RoleSuperAdmin)).
+		Where(role.CodeEQ(model.RoleSuperAdminCode)).
 		Only(ctx)
 	if err != nil {
 		return fmt.Errorf("get super admin role failed: %w", err)

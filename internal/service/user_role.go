@@ -8,6 +8,7 @@ import (
 	"github.com/erewhile/iam/internal/dto/resp"
 	"github.com/erewhile/iam/internal/ent/db"
 	"github.com/erewhile/iam/internal/logger"
+	"github.com/erewhile/iam/internal/model"
 	"github.com/erewhile/iam/internal/repository"
 )
 
@@ -68,7 +69,19 @@ func (s *UserRoleService) Assign(ctx context.Context, params req.UserRoleAssignP
 		return errors.New("failed to assign roles")
 	}
 
-	roleIDs := dedupeInts(body.RoleIDs)
+	superAdminID := 0
+	superAdminRole, err := s.roleRepo.GetByCode(ctx, model.RoleSuperAdminCode)
+	if err != nil {
+		if !db.IsNotFound(err) {
+			logger.Error("failed to get super admin role", err.Error())
+			return errors.New("failed to assign roles")
+		}
+	} else {
+		superAdminID = superAdminRole.ID
+	}
+
+	roleIDs := filterAndDedupeRoles(body.RoleIDs, superAdminID)
+
 	if len(roleIDs) > 0 {
 		count, err := s.roleRepo.CountByIDs(ctx, roleIDs)
 		if err != nil {
@@ -87,10 +100,13 @@ func (s *UserRoleService) Assign(ctx context.Context, params req.UserRoleAssignP
 	return nil
 }
 
-func dedupeInts(ids []int) []int {
+func filterAndDedupeRoles(ids []int, excludeID int) []int {
 	seen := make(map[int]struct{}, len(ids))
 	result := make([]int, 0, len(ids))
 	for _, id := range ids {
+		if excludeID > 0 && id == excludeID {
+			continue
+		}
 		if _, ok := seen[id]; ok {
 			continue
 		}

@@ -9,6 +9,7 @@ import (
 type TokenListItem struct {
 	ID         int       `json:"id"`
 	UserID     int       `json:"user_id"`
+	Username   string    `json:"username"`
 	Jti        uuid.UUID `json:"jti"`
 	SessionID  uuid.UUID `json:"session_id"`
 	TypeDetail string    `json:"type_detail"`

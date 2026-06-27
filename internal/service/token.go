@@ -14,11 +14,12 @@ import (
 
 type TokenService struct {
 	repo       repository.TokenRepository
+	userRepo   repository.UserRepository
 	tokenCache rds.TokenCache
 }
 
-func NewTokenService(repo repository.TokenRepository, tokenCache rds.TokenCache) *TokenService {
-	return &TokenService{repo: repo, tokenCache: tokenCache}
+func NewTokenService(repo repository.TokenRepository, tokenCache rds.TokenCache, userRepo repository.UserRepository) *TokenService {
+	return &TokenService{repo: repo, tokenCache: tokenCache, userRepo: userRepo}
 }
 
 func (s *TokenService) List(ctx context.Context, params req.TokenList) ([]resp.TokenListItem, int, error) {
@@ -28,7 +29,36 @@ func (s *TokenService) List(ctx context.Context, params req.TokenList) ([]resp.T
 		return nil, 0, errors.New("failed to retrieve the list")
 	}
 
-	return content, count, nil
+	users, err := s.userRepo.GetAll(ctx)
+	if err != nil {
+		logger.Error("failed to get all users for token mapping", err)
+	}
+
+	userMap := make(map[int]string)
+	for _, u := range users {
+		userMap[u.ID] = u.Username
+	}
+
+	listItems := make([]resp.TokenListItem, len(content))
+	for i, t := range content {
+		username := userMap[t.UserID]
+		if username == "" {
+			username = "Unknown"
+		}
+
+		listItems[i] = resp.TokenListItem{
+			ID:         t.ID,
+			UserID:     t.UserID,
+			Username:   username,
+			TypeDetail: t.TypeDetail,
+			IP:         t.IP,
+			Jti:        t.Jti,
+			UserAgent:  t.UserAgent,
+			ExpiresAt:  t.ExpiresAt,
+		}
+	}
+
+	return listItems, count, nil
 }
 
 func (s *TokenService) Info(ctx context.Context, params req.InfoPathParams) (*resp.TokenInfo, error) {

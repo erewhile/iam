@@ -125,25 +125,14 @@ func (h *UserHandler) Login(c *gin.Context) {
 func (h *UserHandler) Profile(c *gin.Context) {
 	userID := c.GetInt(consts.MiddlewareUserID)
 
-	uuidVal, exists := c.Get(consts.MiddlewareUserUUID)
-	if !exists {
-		response.Custom(c.Writer, http.StatusOK, "missing uuid")
-		return
-	}
-	userUUID, ok := uuidVal.(uuid.UUID)
-	if !ok {
-		response.Custom(c.Writer, http.StatusOK, "invalid uuid type")
+	ctx := c.Request.Context()
+	profile, err := h.srv.Profile(ctx, userID)
+	if err != nil {
+		response.BadRequest(c.Writer, err.Error())
 		return
 	}
 
-	rolesVal, _ := c.Get(consts.MiddlewareRoles)
-	roles, _ := rolesVal.([]string)
-
-	response.OkData(c.Writer, &resp.UserProfile{
-		UserID:   userID,
-		UserUUID: userUUID,
-		Roles:    roles,
-	})
+	response.OkData(c.Writer, profile)
 }
 
 func (h *UserHandler) Refresh(c *gin.Context) {

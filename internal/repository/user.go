@@ -15,6 +15,7 @@ import (
 type UserRepository interface {
 	List(ctx context.Context, params req.UserList) ([]resp.UserListItem, int, error)
 	Options(ctx context.Context, keyword string) ([]resp.UserSelectOption, error)
+	GetAll(ctx context.Context) ([]resp.UserSelectOption, error)
 	GetByID(ctx context.Context, id int) (*db.User, error)
 	GetByUUID(ctx context.Context, userUUID uuid.UUID) (*db.User, error)
 	GetByEmail(ctx context.Context, email string) (*db.User, error)
@@ -103,6 +104,28 @@ func (r *userRepository) Options(ctx context.Context, keyword string) ([]resp.Us
 	users, err := q.
 		Order(db.Desc(user.FieldID)).
 		Limit(50).
+		All(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	options := make([]resp.UserSelectOption, 0, len(users))
+	for _, item := range users {
+		options = append(options, resp.UserSelectOption{
+			ID:       item.ID,
+			Username: item.Username,
+			Email:    item.Email,
+		})
+	}
+
+	return options, nil
+}
+
+func (r *userRepository) GetAll(ctx context.Context) ([]resp.UserSelectOption, error) {
+	users, err := r.client.User.Query().
+		Where(user.DeletedAtIsNil()).
+		Order(db.Desc(user.FieldID)).
 		All(ctx)
 
 	if err != nil {

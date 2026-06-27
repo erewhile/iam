@@ -114,15 +114,18 @@ func (s *UserService) Login(ctx context.Context, body req.UserLogin) (*token.Tok
 		Roles:         roleCodes,
 	}
 
-	tokenPair, err := s.issueTokenPair(ctx, userPayload, sessionID, body.RequestMeta)
-	if err != nil {
-		return nil, "", err
-	}
-
 	sid, err := s.StartSession(ctx, userInfo.ID, userInfo.UUID)
 	if err != nil {
 		logger.Error("start iam session failed", err)
+		if revokeErr := s.invalidateToken(ctx, sessionID); revokeErr != nil {
+			logger.Error("rollback token failed after start session failure", revokeErr)
+		}
 		return nil, "", errors.New("login failed")
+	}
+
+	tokenPair, err := s.issueTokenPair(ctx, userPayload, sessionID, body.RequestMeta, sid)
+	if err != nil {
+		return nil, "", err
 	}
 
 	return tokenPair, sid, nil
@@ -162,7 +165,7 @@ func (s *UserService) LoginWithOAuthCode(ctx context.Context, payload *rds.OAuth
 		ApplicationID: &applicationID,
 		Roles:         roleCodes,
 	}
-	return s.issueTokenPair(ctx, userPayload, payload.SessionID, meta)
+	return s.issueTokenPair(ctx, userPayload, payload.SessionID, meta, payload.CookieID)
 }
 
 func (s *UserService) Profile(ctx context.Context, userID int) (*resp.UserProfile, error) {
@@ -210,6 +213,16 @@ func (s *UserService) Refresh(ctx context.Context, body req.UserRefresh) (*token
 		return nil, errors.New("refresh token revoked or not found")
 	}
 
+	oldTokenInfo, err := s.token.GetBySession(ctx, claims.SessionID)
+	if err != nil {
+		if db.IsNotFound(err) {
+			s.invalidateToken(ctx, claims.SessionID)
+			return nil, errors.New("refresh token revoked or not found")
+		}
+		logger.Error("get token info failed during refresh", err)
+		return nil, errors.New("refresh failed")
+	}
+
 	userInfo, err := s.repo.GetByID(ctx, payload.UserID)
 	if err != nil {
 		if db.IsNotFound(err) {
@@ -245,7 +258,7 @@ func (s *UserService) Refresh(ctx context.Context, body req.UserRefresh) (*token
 		ApplicationID: payload.ApplicationID,
 		Roles:         roleCodes,
 	}
-	return s.issueTokenPair(ctx, userPayload, newSessionID, body.RequestMeta)
+	return s.issueTokenPair(ctx, userPayload, newSessionID, body.RequestMeta, oldTokenInfo.CookieID)
 }
 
 func (s *UserService) Logout(ctx context.Context, sessionID uuid.UUID, iamSID string) error {
@@ -271,6 +284,7 @@ func (s *UserService) issueTokenPair(
 	userPayload token.UserPayload,
 	sessionID uuid.UUID,
 	meta req.RequestMeta,
+	cookieID string,
 ) (*token.TokenPair, error) {
 	tokenPair, err := token.Generate(
 		userPayload,
@@ -295,6 +309,7 @@ func (s *UserService) issueTokenPair(
 			UserID:    userPayload.UserID,
 			Jti:       accessJti,
 			SessionID: sessionID,
+			CookieID:  cookieID,
 			Type:      model.TokenTypeAccess,
 			TokenHash: hash.HashBlake2b256([]byte(tokenPair.AccessToken)),
 			ExpiresAt: now.Add(tokenCfg.AccessTokenTTL),
@@ -307,6 +322,7 @@ func (s *UserService) issueTokenPair(
 		return txTokenRepo.Create(ctx, req.TokenCreate{
 			UserID:    userPayload.UserID,
 			Jti:       refreshJti,
+			CookieID:  cookieID,
 			SessionID: sessionID,
 			Type:      model.TokenTypeRefresh,
 			TokenHash: hash.HashBlake2b256([]byte(tokenPair.RefreshToken)),
@@ -377,14 +393,19 @@ func (s *UserService) getUserRoleCodes(ctx context.Context, userID int) ([]strin
 }
 
 func (s *UserService) StartSession(ctx context.Context, userID int, userUUID uuid.UUID) (string, error) {
-	sid, err := utils.RandomString(32)
+	sid, err := utils.RandomAlphanumeric(32)
 	if err != nil {
 		return "", err
 	}
-	if err := s.sessionCache.Set(ctx, sid, rds.IAMSessionPayload{
-		UserID:   userID,
-		UserUUID: userUUID,
-	}, config.Get().Session.CookieTTL); err != nil {
+
+	ttl := config.Get().Session.CookieTTL
+	payload := rds.IAMSessionPayload{
+		UserID:    userID,
+		UserUUID:  userUUID,
+		ExpiredAt: utils.Now().Add(ttl).Unix(),
+	}
+
+	if err := s.sessionCache.Set(ctx, sid, payload, ttl); err != nil {
 		return "", err
 	}
 	return sid, nil

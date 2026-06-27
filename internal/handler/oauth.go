@@ -69,7 +69,7 @@ func (h *OAuthHandler) Authorize(c *gin.Context) {
 		c.Redirect(http.StatusFound, loginURL)
 		return
 	}
-	authCode, err := utils.RandomString(32)
+	authCode, err := utils.RandomUnambiguous(32)
 	if err != nil {
 		logger.Error("failed to generate oauth code", err)
 		response.InternalServer(c.Writer)
@@ -83,6 +83,7 @@ func (h *OAuthHandler) Authorize(c *gin.Context) {
 		UserUUID:  userUUID,
 		SessionID: appSessionID,
 		ClientID:  params.ClientID,
+		CookieID:  sid,
 	}); err != nil {
 		logger.Error("failed to save code to cache", err)
 		response.InternalServer(c.Writer)

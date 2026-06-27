@@ -196,7 +196,7 @@ func defaultConfig() *Config {
 			MaxAge:     24,
 		},
 		CORS: CORS{
-			AllowOrigins:     []string{"*"},
+			AllowOrigins:     []string{"http://localhost:26626", "http://127.0.0.1:26626"},
 			AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 			AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization"},
 			AllowCredentials: true,
